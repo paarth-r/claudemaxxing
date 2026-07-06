@@ -4,8 +4,6 @@ import time
 
 from state_io import read_state, write_state, append_history, prune_history
 
-MIN_PERSIST_INTERVAL_SECONDS = 15
-
 
 def build_snapshot(payload, now):
     five_hour = payload.get("rate_limits", {}).get("five_hour")
@@ -22,30 +20,55 @@ def format_statusline(used_percentage):
     return "5h: {}% used".format(round(used_percentage))
 
 
+def merge_snapshot(existing, incoming):
+    """Reconcile this session's own view with the shared state so every
+    session converges on the same, most-advanced number instead of each
+    showing its own possibly-lagging local cache."""
+    if existing is None:
+        return incoming
+    if existing.get("resets_at") != incoming.get("resets_at"):
+        # A new 5h window started - the incoming reading is for that window.
+        return incoming
+    if incoming.get("used_percentage", 0) >= existing.get("used_percentage", 0):
+        return incoming
+    return existing
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
         now = time.time()
-        snapshot = build_snapshot(payload, now)
-        if snapshot is None:
+        incoming = build_snapshot(payload, now)
+        existing = read_state()
+
+        if incoming is None:
+            # This session hasn't made its own API call yet this session -
+            # still show the shared value other sessions have already learned.
+            if existing is not None:
+                print(format_statusline(existing["used_percentage"]))
             return
 
-        # Claude Code can invoke this many times per second; the underlying
-        # rate-limit percentage can jitter on concurrent in-flight requests.
-        # Persist at most once per MIN_PERSIST_INTERVAL_SECONDS so history.jsonl
-        # stays a meaningful trend instead of sub-second noise, while still
-        # printing the freshest known value to the visible statusline.
-        existing = read_state()
-        should_persist = (
+        merged = merge_snapshot(existing, incoming)
+        final_state = {
+            "timestamp": now,
+            "used_percentage": merged["used_percentage"],
+            "resets_at": merged["resets_at"],
+        }
+
+        # Always touch state.json so its mtime proves a session is alive
+        # (staleness detection), even when the value itself hasn't moved.
+        write_state(final_state)
+
+        changed = (
             existing is None
-            or (now - existing.get("timestamp", 0)) >= MIN_PERSIST_INTERVAL_SECONDS
+            or existing.get("used_percentage") != final_state["used_percentage"]
+            or existing.get("resets_at") != final_state["resets_at"]
         )
-        if should_persist:
-            write_state(snapshot)
-            append_history(snapshot)
+        if changed:
+            append_history(final_state)
             prune_history(now=now)
 
-        print(format_statusline(snapshot["used_percentage"]))
+        print(format_statusline(final_state["used_percentage"]))
     except Exception:
         # Never let a statusline error break the user's Claude Code session.
         return
