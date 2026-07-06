@@ -1,8 +1,8 @@
-# Claude Usage Monitor
+# claudemaxxing
 
 A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you're on pace to hit 100% before it resets. Comes with commentary from history's greatest philosophers, who have opinions about your subagent usage.
 
-![Claude Usage Monitor screenshot](docs/assets/screenshot.png)
+![claudemaxxing screenshot](docs/assets/screenshot.png)
 
 ## What it does
 
@@ -16,19 +16,19 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 ## Install
 
 ```
-git clone https://github.com/paarth-r/usage-monitor.git
-cd usage-monitor
+git clone https://github.com/paarth-r/claudemaxxing.git
+cd claudemaxxing
 ./install.sh
 ```
 
-`install.sh` installs the one Python dependency (`rich`), symlinks the `claude-usage` command onto your `PATH` (`~/.local/bin`), and wires a small hook into `~/.claude/settings.json` — it only adds a `statusLine` key and leaves the rest of your settings untouched.
+`install.sh` installs the one Python dependency (`rich`), symlinks the `claudemaxxing` command onto your `PATH` (`~/.local/bin`), and wires a small hook into `~/.claude/settings.json` — it only adds a `statusLine` key and leaves the rest of your settings untouched.
 
 No `git` handy? Use GitHub's **Code → Download ZIP** button above, unzip, and run `./install.sh` from inside the folder.
 
 Then send at least one message in any Claude Code session (so it has usage data to report), and run:
 
 ```
-claude-usage
+claudemaxxing
 ```
 
 ## How it works

@@ -6,12 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "==> Installing Python dependencies (rich)"
 python3 -m pip install --user -q -r "$SCRIPT_DIR/requirements.txt"
 
-echo "==> Making bin/claude-usage executable"
-chmod +x "$SCRIPT_DIR/bin/claude-usage"
+echo "==> Making bin/claudemaxxing executable"
+chmod +x "$SCRIPT_DIR/bin/claudemaxxing"
 
-echo "==> Linking claude-usage onto your PATH"
+echo "==> Linking claudemaxxing onto your PATH"
 mkdir -p "$HOME/.local/bin"
-ln -sf "$SCRIPT_DIR/bin/claude-usage" "$HOME/.local/bin/claude-usage"
+ln -sf "$SCRIPT_DIR/bin/claudemaxxing" "$HOME/.local/bin/claudemaxxing"
 
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
@@ -56,5 +56,5 @@ echo ""
 echo "==> Done. Send at least one message in any Claude Code session so it"
 echo "    reports usage data, then run:"
 echo ""
-echo "      claude-usage"
+echo "      claudemaxxing"
 echo ""

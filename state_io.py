@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 
 STATE_PATH = os.path.expanduser("~/.claude/usage-monitor/state.json")
 HISTORY_PATH = os.path.expanduser("~/.claude/usage-monitor/history.jsonl")
@@ -9,17 +10,34 @@ def _ensure_parent_dir(path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
 
+def _atomic_write(path, contents):
+    """Write via a temp file + rename so concurrent writers (multiple Claude
+    Code sessions invoking the statusline hook at once) can never interleave
+    and corrupt the file - the rename is atomic at the filesystem level."""
+    _ensure_parent_dir(path)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(contents)
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
 def read_state(path=STATE_PATH):
     if not os.path.exists(path):
         return None
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return None
 
 
 def write_state(snapshot, path=STATE_PATH):
-    _ensure_parent_dir(path)
-    with open(path, "w") as f:
-        json.dump(snapshot, f)
+    _atomic_write(path, json.dumps(snapshot))
 
 
 def read_history(path=HISTORY_PATH):
@@ -46,7 +64,5 @@ def append_history(sample, path=HISTORY_PATH):
 
 def prune_history(now, path=HISTORY_PATH):
     samples = [s for s in read_history(path) if s.get("resets_at", 0) > now]
-    _ensure_parent_dir(path)
-    with open(path, "w") as f:
-        for s in samples:
-            f.write(json.dumps(s) + "\n")
+    contents = "".join(json.dumps(s) + "\n" for s in samples)
+    _atomic_write(path, contents)

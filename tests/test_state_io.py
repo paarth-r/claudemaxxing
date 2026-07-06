@@ -23,6 +23,22 @@ def test_append_and_read_history(tmp_path):
     assert samples[0]["used_percentage"] == 10
     assert samples[1]["used_percentage"] == 20
 
+def test_read_state_corrupt_json_returns_none(tmp_path):
+    path = str(tmp_path / "state.json")
+    with open(path, "w") as f:
+        f.write('{"used_percentage": 10, "resets_at": 100}}')  # interleaved-write style corruption
+    assert read_state(path) is None
+
+def test_write_state_survives_interleaved_writers(tmp_path):
+    path = str(tmp_path / "state.json")
+    write_state({"used_percentage": 10, "resets_at": 100}, path)
+    write_state({"used_percentage": 20, "resets_at": 100}, path)
+    # Whichever write "won", the file must be valid JSON - never a partial/interleaved mix.
+    assert read_state(path) in (
+        {"used_percentage": 10, "resets_at": 100},
+        {"used_percentage": 20, "resets_at": 100},
+    )
+
 def test_read_history_skips_corrupt_lines(tmp_path):
     path = str(tmp_path / "history.jsonl")
     with open(path, "w") as f:

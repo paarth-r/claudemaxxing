@@ -41,7 +41,7 @@ def pace_color(pace):
 def render(state, history, last_quote):
     if state is None:
         return Panel(Text("Waiting for first Claude Code render...", style="dim"),
-                      title="Claude Usage Monitor")
+                      title="claudemaxxing")
 
     used_pct = state["used_percentage"]
     resets_at = state["resets_at"]
@@ -76,7 +76,7 @@ def render(state, history, last_quote):
         quote_text, philosopher = last_quote
         lines.append(Text("\n· \"{}\" —{} ·".format(quote_text, philosopher), style="dim italic"))
 
-    return Panel(Group(*lines), title="Claude Usage Monitor (5h window)")
+    return Panel(Group(*lines), title="claudemaxxing (5h window)")
 
 
 def main():
