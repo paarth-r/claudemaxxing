@@ -52,10 +52,14 @@ def render_heatmap(window_history, current_peak_pct, current_window_end, now):
             cube_line.append(" " * GAP_WIDTH)
 
     total_width = len(cubes) * CUBE_WIDTH + (len(cubes) - 1) * GAP_WIDTH
-    left_label = "{} ago".format(format_time_ago(cubes[0]["ago_seconds"]))
-    right_label = "now"
-    padding = max(1, total_width - len(left_label) - len(right_label))
-    timeline = Text(left_label + " " * padding + right_label, style="dim")
+    if len(cubes) <= 1:
+        # No completed 5h window yet - nothing meaningful to date-range.
+        timeline = Text("history builds up as 5h windows complete", style="dim")
+    else:
+        left_label = "{} ago".format(format_time_ago(cubes[0]["ago_seconds"]))
+        right_label = "now"
+        padding = max(1, total_width - len(left_label) - len(right_label))
+        timeline = Text(left_label + " " * padding + right_label, style="dim")
 
     return cube_line, timeline
 
