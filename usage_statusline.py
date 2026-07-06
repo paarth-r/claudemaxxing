@@ -2,7 +2,13 @@ import json
 import sys
 import time
 
-from state_io import read_state, write_state, append_history, prune_history
+from state_io import (
+    read_state,
+    write_state,
+    append_history,
+    prune_history,
+    WINDOW_HISTORY_PATH,
+)
 
 
 def build_snapshot(payload, now):
@@ -34,6 +40,22 @@ def merge_snapshot(existing, incoming):
     return existing
 
 
+def build_window_archive_entry(existing, final_state, now):
+    """When the 5h window has just rolled over, return a permanent record of
+    the just-ended window's peak usage - None if no window boundary was
+    crossed. existing's used_percentage is the final peak for its window
+    since merge_snapshot always keeps the running max within a window."""
+    if existing is None:
+        return None
+    if existing.get("resets_at") == final_state.get("resets_at"):
+        return None
+    return {
+        "resets_at": existing["resets_at"],
+        "peak_usage_percentage": existing["used_percentage"],
+        "archived_at": now,
+    }
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
@@ -54,6 +76,10 @@ def main():
             "used_percentage": merged["used_percentage"],
             "resets_at": merged["resets_at"],
         }
+
+        archive_entry = build_window_archive_entry(existing, final_state, now)
+        if archive_entry is not None:
+            append_history(archive_entry, path=WINDOW_HISTORY_PATH)
 
         # Always touch state.json so its mtime proves a session is alive
         # (staleness detection), even when the value itself hasn't moved.

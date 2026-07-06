@@ -59,11 +59,14 @@ def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTE
                         ts = _parse_iso_timestamp(obj.get("timestamp"))
                         if ts is None or ts < cutoff:
                             continue
+                        # Deliberately excludes cache_read_input_tokens: that
+                        # field re-bills the entire cached context on every
+                        # message and stays huge/roughly-constant for a long
+                        # conversation, drowning out the actual new-work signal.
                         total_tokens = (
                             usage.get("input_tokens", 0)
                             + usage.get("output_tokens", 0)
                             + usage.get("cache_creation_input_tokens", 0)
-                            + usage.get("cache_read_input_tokens", 0)
                         )
                         samples.append((ts, total_tokens))
             except OSError:

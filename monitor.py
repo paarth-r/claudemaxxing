@@ -6,10 +6,11 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from state_io import read_state, read_history, STATE_PATH
+from state_io import read_state, read_history, STATE_PATH, WINDOW_HISTORY_PATH
 from pace import compute_elapsed_percentage, compute_pace, is_stale
 from quotes import FRUGAL_QUOTES, EXCESS_QUOTES, pick_quote
 from stats import tokens_per_minute, count_active_claude_sessions
+from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
 
 POLL_SECONDS = 60
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
@@ -39,7 +40,27 @@ def pace_color(pace):
     return {"ABOVE": "red", "AT": "yellow", "BELOW": "green"}[pace]
 
 
-def render(state, history, last_quote, live_stats=None):
+def render_heatmap(window_history, current_peak_pct, current_window_end, now):
+    cubes = build_cube_row(window_history, current_peak_pct, current_window_end, now)
+    if not cubes:
+        return None
+
+    cube_line = Text()
+    for i, cube in enumerate(cubes):
+        cube_line.append(" " * CUBE_WIDTH, style="on {}".format(color_for_pct(cube["pct"])))
+        if i < len(cubes) - 1:
+            cube_line.append(" " * GAP_WIDTH)
+
+    total_width = len(cubes) * CUBE_WIDTH + (len(cubes) - 1) * GAP_WIDTH
+    left_label = "{} ago".format(format_time_ago(cubes[0]["ago_seconds"]))
+    right_label = "now"
+    padding = max(1, total_width - len(left_label) - len(right_label))
+    timeline = Text(left_label + " " * padding + right_label, style="dim")
+
+    return cube_line, timeline
+
+
+def render(state, history, last_quote, live_stats=None, window_history=None):
     if state is None:
         return Panel(Text("Waiting for first Claude Code render...", style="dim"),
                       title="claudemaxxing")
@@ -73,6 +94,14 @@ def render(state, history, last_quote, live_stats=None):
     if values:
         lines.append(Text("\n{}".format(sparkline(values)), style="cyan"))
 
+    heatmap_result = render_heatmap(window_history or [], used_pct, resets_at, now)
+    if heatmap_result:
+        cube_line, timeline = heatmap_result
+        prefixed_cube_line = Text("\n")
+        prefixed_cube_line.append_text(cube_line)
+        lines.append(prefixed_cube_line)
+        lines.append(timeline)
+
     if live_stats:
         stats_text = "\nTokens/min: {:,.0f}   Active sessions: {}".format(
             live_stats["tokens_per_minute"], live_stats["active_sessions"]
@@ -94,6 +123,7 @@ def main():
         while True:
             state = read_state()
             history = read_history()
+            window_history = read_history(WINDOW_HISTORY_PATH)
             live_stats = {
                 "tokens_per_minute": tokens_per_minute(),
                 "active_sessions": count_active_claude_sessions(),
@@ -108,7 +138,7 @@ def main():
                     last_quote = pick_quote(pool)
                     last_pace = pace
 
-            live.update(render(state, history, last_quote, live_stats))
+            live.update(render(state, history, last_quote, live_stats, window_history))
             time.sleep(POLL_SECONDS)
 
 

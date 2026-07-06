@@ -9,6 +9,8 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 - Live progress bars for **usage% used** and **% of the 5-hour window elapsed**
 - A **pace badge** (`ABOVE` / `AT` / `BELOW`) telling you whether you're burning faster or slower than time is passing
 - A **sparkline** of your usage trend across the current window
+- Real-time **tokens/min** (from your actual Claude Code transcripts) and a count of **active Claude Code sessions** running right now
+- A **GitHub-commit-graph-style heatmap**: one cube per completed 5-hour window, shaded from grey (no usage) to green (100% peak usage), with a timeline underneath. Persists across restarts so your history keeps building.
 - A rotating **fake philosopher quote** — wisdom about restraint when you're pacing fine, mockery of excess when you're not
 - Works across multiple open Claude Code sessions/terminals: they all converge on the same number instead of each showing their own stale local reading
 - Refreshes once a minute

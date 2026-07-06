@@ -4,6 +4,9 @@ import tempfile
 
 STATE_PATH = os.path.expanduser("~/.claude/usage-monitor/state.json")
 HISTORY_PATH = os.path.expanduser("~/.claude/usage-monitor/history.jsonl")
+# Permanent log of completed 5h windows (never pruned) - read_history/append_history
+# below are generic over path, so they work for this file too.
+WINDOW_HISTORY_PATH = os.path.expanduser("~/.claude/usage-monitor/window_history.jsonl")
 
 
 def _ensure_parent_dir(path):
