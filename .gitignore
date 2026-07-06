@@ -1,3 +1,5 @@
 state.json
 history.jsonl
 __pycache__/
+.pytest_cache/
+*.pyc
