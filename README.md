@@ -1,4 +1,4 @@
-# claudemaxxing
+ƒ# claudemaxxing
 
 A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you're on pace to hit 100% before it resets. Comes with commentary from history's greatest philosophers, who have opinions about your subagent usage.
 
@@ -23,7 +23,7 @@ cd claudemaxxing
 
 `install.sh` installs the one Python dependency (`rich`), symlinks the `claudemaxxing` command onto your `PATH` (`~/.local/bin`), and wires a small hook into `~/.claude/settings.json` — it only adds a `statusLine` key and leaves the rest of your settings untouched.
 
-No `git` handy? Use GitHub's **Code → Download ZIP** button above, unzip, and run `./install.sh` from inside the folder.
+If you've somehow managed to install and use Claude code to a point where you need this tool without using `git`, you can use GitHub's **Code → Download ZIP** button above, unzip, and run `./install.sh` from inside the folder.
 
 Then send at least one message in any Claude Code session (so it has usage data to report), and run:
 
