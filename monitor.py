@@ -9,10 +9,11 @@ from rich.text import Text
 from state_io import read_state, read_history, STATE_PATH
 from pace import compute_elapsed_percentage, compute_pace, is_stale
 from quotes import FRUGAL_QUOTES, EXCESS_QUOTES, pick_quote
+from stats import tokens_per_minute, count_active_claude_sessions
 
 POLL_SECONDS = 60
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
-BAR_WIDTH = 40
+BAR_WIDTH = 60
 
 console = Console()
 
@@ -38,7 +39,7 @@ def pace_color(pace):
     return {"ABOVE": "red", "AT": "yellow", "BELOW": "green"}[pace]
 
 
-def render(state, history, last_quote):
+def render(state, history, last_quote, live_stats=None):
     if state is None:
         return Panel(Text("Waiting for first Claude Code render...", style="dim"),
                       title="claudemaxxing")
@@ -72,6 +73,12 @@ def render(state, history, last_quote):
     if values:
         lines.append(Text("\n{}".format(sparkline(values)), style="cyan"))
 
+    if live_stats:
+        stats_text = "\nTokens/min: {:,.0f}   Active sessions: {}".format(
+            live_stats["tokens_per_minute"], live_stats["active_sessions"]
+        )
+        lines.append(Text(stats_text, style="bold"))
+
     if last_quote:
         quote_text, philosopher = last_quote
         lines.append(Text("\n· \"{}\" —{} ·".format(quote_text, philosopher), style="dim italic"))
@@ -87,6 +94,10 @@ def main():
         while True:
             state = read_state()
             history = read_history()
+            live_stats = {
+                "tokens_per_minute": tokens_per_minute(),
+                "active_sessions": count_active_claude_sessions(),
+            }
 
             if state is not None:
                 now = time.time()
@@ -97,7 +108,7 @@ def main():
                     last_quote = pick_quote(pool)
                     last_pace = pace
 
-            live.update(render(state, history, last_quote))
+            live.update(render(state, history, last_quote, live_stats))
             time.sleep(POLL_SECONDS)
 
 
