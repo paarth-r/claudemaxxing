@@ -1,4 +1,4 @@
-ƒ# claudemaxxing
+# claudemaxxing
 
 A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you're on pace to hit 100% before it resets. Comes with commentary from history's greatest philosophers, who have opinions about your subagent usage.
 
