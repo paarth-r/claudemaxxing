@@ -26,6 +26,7 @@ PACE_HINTS = {"ABOVE": "ease off", "AT": "right on pace", "BELOW": "use more"}
 POLL_SECONDS = 60
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 BAR_WIDTH = 60
+SPARK_MAX_WIDTH = BAR_WIDTH
 WINDOW_SECONDS = 18000
 
 console = Console()
@@ -44,7 +45,12 @@ def pace_info(state, history, now):
     return {"current_rate": current_rate, "ideal_rate": ideal_rate, "pace": pace}
 
 
-def sparkline(values):
+def sparkline(values, max_width=None):
+    """Renders the most recent max_width samples. Older samples are dropped
+    rather than compressed or wrapped - a graph that scrolls off the left
+    edge stays readable; one that wraps mid-line does not."""
+    if max_width:
+        values = values[-max_width:]
     if not values:
         return ""
     lo, hi = min(values), max(values)
@@ -132,7 +138,8 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
 
     values = [s["used_percentage"] for s in history]
     if values:
-        lines.append(Text("\n{}".format(sparkline(values)), style="cyan"))
+        lines.append(Text("\n{}".format(sparkline(values, max_width=SPARK_MAX_WIDTH)),
+                          style="cyan", no_wrap=True))
 
     heatmap_result = render_heatmap(window_history or [], used_pct, resets_at, now)
     if heatmap_result:
@@ -148,7 +155,9 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
         )
         lines.append(Text(stats_text, style="bold"))
 
-    if model_stats is not None:
+    # Model burn/suggestion is only useful when there's a pace problem to
+    # act on - at AT pace there's nothing to suggest, so show nothing.
+    if model_stats is not None and pace != "AT":
         rates = apply_estimates(model_stats["averages"])
         suggest_prefix = "\n"  # keep panel spacing when there is no burn line yet
         if rates:
@@ -159,7 +168,7 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
                 )
                 for m, a in by_rate
             )
-            lines.append(Text("\n" + burn_text, style="bold"))
+            lines.append(Text("\n" + burn_text, style="bold", no_wrap=True, overflow="ellipsis"))
             suggest_prefix = ""
         suggestion = suggest(
             pace, info["ideal_rate"], info["current_rate"], used_pct,
