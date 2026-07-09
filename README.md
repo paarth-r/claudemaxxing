@@ -1,6 +1,6 @@
 # claudemaxxing
 
-A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you should be using Claude *more*, *less*, or you're right on pace to use your whole allowance with nothing left over. Comes with commentary from history's greatest philosophers, who have opinions about your subagent usage.
+A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you should be using Claude *more*, *less*, or you're right on pace to use your whole allowance with nothing left over. Comes with commentary from history's greatest philosophers — each now gainfully employed in tech — who have opinions about your subagent usage.
 
 ![claudemaxxing screenshot](docs/assets/screenshot.png)
 
@@ -13,7 +13,7 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 - A **sparkline** of your usage trend across the current window
 - Real-time **tokens/min** (from your actual Claude Code transcripts, excluding cache-read overhead so it reflects real new work) and a count of **active Claude Code sessions** running right now
 - A **GitHub-commit-graph-style heatmap**: one cube per completed 5-hour window, shaded from grey (no usage) to green (100% peak usage), with a timeline underneath. Persists permanently across restarts so your history keeps building.
-- A rotating **fake philosopher quote**, scoped to whichever pace state is active — nudges to use more when you're under, mockery of excess when you're over, wisdom about the middle way when you're right on pace
+- A rotating **fake philosopher quote**, scoped to whichever pace state is active — nudges to use more when you're under, mockery of excess when you're over, wisdom about the middle way when you're right on pace. Each of the 26 philosophers has a fixed, anachronistic tech job title (Marcus Aurelius, Head of Stoic Philosophy @ McKinsey; Kafka, Founding Engineer @ Apache Kafka; Kant, Head of Multimodal Research @ Anthropic)
 - Works across multiple open Claude Code sessions/terminals: they all converge on the same number instead of each showing their own stale local reading
 - Clears the terminal and fills the full window height on start; refreshes once a minute
 
@@ -51,6 +51,8 @@ Three things worth knowing:
 - Python 3
 - [Claude Code](https://claude.ai/code)
 - `rich` (installed automatically by `install.sh`)
+
+65 tests covering the pace math, multi-session merge logic, and file I/O — `pytest` (dev only, not needed to run the tool).
 
 ## License
 
