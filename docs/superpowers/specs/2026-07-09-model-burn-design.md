@@ -67,6 +67,20 @@ may register only 1–2%, but the weighted average across accumulated minutes is
 unbiased. A model is **eligible** for suggestions once it has ≥ 10 total clean
 minutes observed.
 
+## Estimates for unmeasured models
+
+A model with fewer than the eligible minutes gets an **estimated** rate
+instead of its noisy raw measurement: take the eligible model with the most
+measured minutes as the anchor, divide its rate by its price weight, and
+multiply by the target's weight. Price weights come from API pricing
+(2026-07, $/MTok input — output has the identical ratio):
+haiku 1 : sonnet 3 : opus 5 : fable 10. Estimates are marked `(est)` in the
+panel and feed the suggestion engine like measured rates; each is replaced
+by the real measurement once that model accumulates enough clean minutes.
+With no eligible anchor at all, the panel still shows `collecting data` —
+%/min depends on the user's plan and workload, so there is no absolute
+prior to fall back to.
+
 ## Suggestion engine
 
 Inputs, all already available in the monitor loop:
