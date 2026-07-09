@@ -1,7 +1,7 @@
 import os
 
 from state_io import read_state, write_state, read_history, append_history
-from stats import recent_token_samples
+from stats import recent_token_samples, session_snapshots
 
 # Permanent per-model burn samples (never pruned) and the processing cursor
 # that prevents re-counting intervals across monitor restarts.
@@ -18,6 +18,7 @@ MIN_ELIGIBLE_MINUTES = 10.0
 NOMINAL_SESSION_MINUTES = 30.0
 MAX_INTERVAL_MINUTES = 20.0
 CURRENT_MODEL_LOOKBACK_SECONDS = 600
+SESSION_WINDOW_SECONDS = 300
 
 
 def normalize_model_id(model_id):
@@ -191,6 +192,40 @@ def suggest(pace, ideal_rate, current_rate, used_pct, remaining_minutes, current
         return "ease off - even {} overshoots".format(lightest)
 
     return _stay(current_model, eligible, ideal_rate)
+
+
+def heaviest_session(now, window_seconds=SESSION_WINDOW_SECONDS, snapshot_fn=session_snapshots):
+    """Identify the single active Claude Code session burning the most
+    tokens/min in the trailing window - the one worth naming when overall
+    pace is ABOVE, since the aggregate suggestion can't point at a terminal."""
+    snapshots = snapshot_fn(now - window_seconds)
+    if not snapshots:
+        return None
+    worst = max(snapshots, key=lambda s: s["tokens"])
+    return {
+        "project": worst["project"],
+        "session_id": worst["session_id"],
+        "model": normalize_model_id(worst["dominant_model"]),
+        "tokens_per_minute": worst["tokens"] / (window_seconds / 60),
+    }
+
+
+def suggest_hot_session_action(pace, ideal_rate, hot_session, rates):
+    """Only ever fires when pace is ABOVE - the aggregate 'switch to X'
+    suggestion says what to do in general; this names the specific session
+    to act on. Prefers naming a lighter model that still fits the ideal
+    rate; falls back to 'kill' when no model would help (unknown rates, or
+    the session is already on the lightest fit)."""
+    if pace != "ABOVE" or hot_session is None:
+        return None
+    label = "{} ({})".format(hot_session["project"], hot_session["session_id"][:8])
+    if rates:
+        by_rate_desc = sorted(rates, key=lambda m: rates[m]["rate"], reverse=True)
+        fits = [m for m in by_rate_desc
+                if rates[m]["rate"] <= ideal_rate and m != hot_session["model"]]
+        if fits:
+            return "switch {} to {}".format(label, fits[0])
+    return "kill {} - heaviest session".format(label)
 
 
 def gather_model_stats(history, now, burn_path=MODEL_BURN_PATH,

@@ -244,6 +244,53 @@ def test_gather_model_stats_recovers_from_lost_cursor_without_duplicates(tmp_pat
                        cursor_path=cursor_path, token_samples_fn=lambda cutoff: tokens)
     assert len(read_burn_history(path=burn_path)) == 1
 
+from model_burn import heaviest_session, suggest_hot_session_action, SESSION_WINDOW_SECONDS
+
+def test_heaviest_session_picks_highest_token_count():
+    def fake_snapshots(cutoff):
+        return [
+            {"session_id": "sess-a", "project": "hyperform", "tokens": 500, "dominant_model": "claude-opus-4-8"},
+            {"session_id": "sess-b", "project": "storepose", "tokens": 12000, "dominant_model": "claude-haiku-4-5"},
+        ]
+    result = heaviest_session(now=1000, snapshot_fn=fake_snapshots)
+    assert result["session_id"] == "sess-b"
+    assert result["project"] == "storepose"
+    assert result["model"] == "haiku"
+    assert result["tokens_per_minute"] == 12000 / (SESSION_WINDOW_SECONDS / 60)
+
+def test_heaviest_session_none_when_no_snapshots():
+    assert heaviest_session(now=1000, snapshot_fn=lambda cutoff: []) is None
+
+def test_heaviest_session_unattributed_model_is_none():
+    def fake_snapshots(cutoff):
+        return [{"session_id": "sess-a", "project": "proj", "tokens": 100, "dominant_model": None}]
+    result = heaviest_session(now=1000, snapshot_fn=fake_snapshots)
+    assert result["model"] is None
+
+
+HOT = {"session_id": "sess-a12345", "project": "hyperform", "model": "opus", "tokens_per_minute": 9000}
+
+def test_suggest_hot_session_none_when_not_above():
+    assert suggest_hot_session_action("AT", 0.3, HOT, AVGS) is None
+    assert suggest_hot_session_action("BELOW", 0.3, HOT, AVGS) is None
+
+def test_suggest_hot_session_none_when_no_hot_session():
+    assert suggest_hot_session_action("ABOVE", 0.3, None, AVGS) is None
+
+def test_suggest_hot_session_switches_to_heaviest_fitting_model():
+    assert suggest_hot_session_action("ABOVE", 0.3, HOT, AVGS) == "switch hyperform (sess-a12) to sonnet"
+
+def test_suggest_hot_session_kills_when_nothing_fits():
+    assert suggest_hot_session_action("ABOVE", 0.01, HOT, AVGS) == "kill hyperform (sess-a12) - heaviest session"
+
+def test_suggest_hot_session_kills_when_no_rates():
+    assert suggest_hot_session_action("ABOVE", 0.3, HOT, {}) == "kill hyperform (sess-a12) - heaviest session"
+
+def test_suggest_hot_session_kills_when_already_on_best_fit():
+    only = {"opus": {"rate": 0.5, "minutes": 60.0}}
+    assert suggest_hot_session_action("ABOVE", 0.6, HOT, only) == "kill hyperform (sess-a12) - heaviest session"
+
+
 def test_gather_model_stats_empty_history(tmp_path):
     result = gather_model_stats([], now=200,
                                 burn_path=str(tmp_path / "b.jsonl"),
