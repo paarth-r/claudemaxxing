@@ -4,6 +4,13 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 
 ![claudemaxxing screenshot](docs/assets/screenshot.png)
 
+<details>
+<summary>What it looks like when you're burning too fast (<code>ABOVE</code> pace)</summary>
+
+![claudemaxxing screenshot, ABOVE pace](docs/assets/screenshot-above.png)
+
+</details>
+
 ## What it does
 
 - Live progress bars for **usage% used** and **% of the 5-hour window elapsed**
