@@ -53,3 +53,28 @@ def build_intervals(history, last_processed):
             "duration_minutes": duration_minutes,
         })
     return intervals
+
+
+def attribute_interval(interval, token_samples):
+    """Return a clean burn sample if exactly one model generated tokens
+    inside (t0, t1] - mixed intervals would force a guess about per-token
+    weights, which is exactly what this measurement exists to replace."""
+    by_model = {}
+    for ts, tokens, model in token_samples:
+        if not (interval["t0"] < ts <= interval["t1"]) or tokens <= 0:
+            continue
+        short = normalize_model_id(model)
+        if short is None:
+            continue
+        by_model[short] = by_model.get(short, 0) + tokens
+    if len(by_model) != 1:
+        return None
+    model, tokens = next(iter(by_model.items()))
+    return {
+        "model": model,
+        "delta_pct": interval["delta_pct"],
+        "duration_minutes": interval["duration_minutes"],
+        "tokens": tokens,
+        "t0": interval["t0"],
+        "t1": interval["t1"],
+    }

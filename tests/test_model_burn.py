@@ -45,3 +45,33 @@ def test_build_intervals_skips_idle_gaps_and_negative_deltas():
     assert build_intervals(history, last_processed=0) == []
     history = [_h(100, 10), _h(160, 9)]
     assert build_intervals(history, last_processed=0) == []
+
+
+from model_burn import attribute_interval
+
+INTERVAL = {"t0": 100, "t1": 160, "delta_pct": 1, "duration_minutes": 1.0}
+
+def test_attribute_interval_single_model_is_clean():
+    samples = [(120, 500, "claude-fable-5"), (150, 300, "claude-fable-5")]
+    result = attribute_interval(INTERVAL, samples)
+    assert result == {
+        "model": "fable", "delta_pct": 1, "duration_minutes": 1.0,
+        "tokens": 800, "t0": 100, "t1": 160,
+    }
+
+def test_attribute_interval_mixed_models_rejected():
+    samples = [(120, 500, "claude-fable-5"), (150, 300, "claude-sonnet-5")]
+    assert attribute_interval(INTERVAL, samples) is None
+
+def test_attribute_interval_no_tokens_rejected():
+    assert attribute_interval(INTERVAL, []) is None
+
+def test_attribute_interval_ignores_samples_outside_interval():
+    samples = [(90, 999, "claude-sonnet-5"), (120, 500, "claude-fable-5"), (200, 999, "claude-opus-4-8")]
+    result = attribute_interval(INTERVAL, samples)
+    assert result["model"] == "fable" and result["tokens"] == 500
+
+def test_attribute_interval_ignores_model_less_samples():
+    samples = [(120, 500, "claude-fable-5"), (130, 100, None)]
+    result = attribute_interval(INTERVAL, samples)
+    assert result["model"] == "fable" and result["tokens"] == 500
