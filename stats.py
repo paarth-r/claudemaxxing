@@ -104,7 +104,7 @@ def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTE
                         + usage.get("output_tokens", 0)
                         + usage.get("cache_creation_input_tokens", 0)
                     )
-                    samples.append((ts, total_tokens))
+                    samples.append((ts, total_tokens, message.get("model")))
             except OSError:
                 continue
     return samples
@@ -113,7 +113,8 @@ def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTE
 def tokens_per_minute(window_seconds=300):
     now = time.time()
     samples = recent_token_samples(cutoff=now - window_seconds)
-    return compute_tokens_per_minute(samples, now=now, window_seconds=window_seconds)
+    pairs = [(ts, tokens) for ts, tokens, _model in samples]
+    return compute_tokens_per_minute(pairs, now=now, window_seconds=window_seconds)
 
 
 def count_sessions_from_ps_lines(lines):

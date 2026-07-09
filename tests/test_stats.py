@@ -30,10 +30,13 @@ def test_count_sessions_from_ps_lines_empty():
     assert count_sessions_from_ps_lines([]) == 0
 
 
-def _write_jsonl_line(f, timestamp_epoch, usage):
+def _write_jsonl_line(f, timestamp_epoch, usage, model=None):
     import datetime
     ts_str = datetime.datetime.utcfromtimestamp(timestamp_epoch).isoformat() + "Z"
-    f.write(json.dumps({"timestamp": ts_str, "message": {"role": "assistant", "usage": usage}}) + "\n")
+    message = {"role": "assistant", "usage": usage}
+    if model is not None:
+        message["model"] = model
+    f.write(json.dumps({"timestamp": ts_str, "message": message}) + "\n")
 
 
 def test_recent_token_samples_finds_data_beyond_a_small_initial_tail_guess(tmp_path):
@@ -58,7 +61,7 @@ def test_recent_token_samples_finds_data_beyond_a_small_initial_tail_guess(tmp_p
     cutoff = now - 300
     samples = recent_token_samples(cutoff=cutoff, projects_dir=str(tmp_path), tail_bytes=200)
     recent = [s for s in samples if s[0] >= cutoff]
-    buried_message_tokens = [t for ts, t in recent if t == 20]
+    buried_message_tokens = [t for ts, t, _model in recent if t == 20]
     assert buried_message_tokens == [20], "the buried-but-in-window message must still be counted"
 
 def test_recent_token_samples_excludes_cache_read_tokens(tmp_path):
@@ -71,4 +74,13 @@ def test_recent_token_samples_excludes_cache_read_tokens(tmp_path):
             "cache_creation_input_tokens": 5, "cache_read_input_tokens": 999999,
         })
     samples = stats.recent_token_samples(cutoff=now - 300, projects_dir=str(tmp_path))
-    assert samples == [(samples[0][0], 10)]  # 2+3+5, cache_read excluded
+    assert samples == [(samples[0][0], 10, None)]  # 2+3+5, cache_read excluded
+
+
+def test_recent_token_samples_includes_model(tmp_path):
+    path = tmp_path / "session.jsonl"
+    now = time.time()
+    with open(path, "w") as f:
+        _write_jsonl_line(f, now - 10, {"input_tokens": 2, "output_tokens": 3}, model="claude-fable-5")
+    samples = recent_token_samples(cutoff=now - 300, projects_dir=str(tmp_path))
+    assert samples == [(samples[0][0], 5, "claude-fable-5")]
