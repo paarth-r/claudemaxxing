@@ -150,6 +150,13 @@ New compact panel row in `monitor.py`:
 - A highlighted suggestion line, e.g. `SUGGEST: one more opus session`,
   rendered near the existing pace badge. Shows `collecting data` dimmed until
   a model is eligible.
+- **Pace-gated (amendment, 2026-07-09):** the entire section — burn line,
+  aggregate suggestion, and hot-session suggestion — only renders at `BELOW`
+  or `ABOVE` pace. At `AT` pace there is nothing actionable to say, so
+  nothing is shown; `suggest()`'s `"stay on {model}"` return value is still
+  a valid part of its API for other callers, but `monitor.py` never renders
+  it. Burn/suggest lines are `no_wrap=True` with `overflow="ellipsis"` so a
+  long model list truncates instead of wrapping onto the next panel row.
 - No emojis anywhere, matching project style.
 
 ## Error handling

@@ -17,9 +17,9 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 - A real **Rate vs. Ideal** comparison: your actual recent %/min consumption rate against the ideal %/min that would land you at exactly 100% right when the window resets — recalculated live every refresh, not a static snapshot
 - A **pace badge** (`ABOVE` / `AT` / `BELOW`) that tells you plainly whether to **ease off**, **use more**, or you're **right on pace**
 - A **"Resets in" countdown** to your next window
-- A **sparkline** of your usage trend across the current window
+- A **sparkline** of your usage trend across the current window, capped to the most recent 60 samples — older points scroll off instead of wrapping the line
 - Real-time **tokens/min** (from your actual Claude Code transcripts, excluding cache-read overhead so it reflects real new work) and a count of **active Claude Code sessions** running right now
-- **Per-model burn rates**: measures how fast each Claude model (Haiku, Sonnet, Opus, Fable) empirically burns the 5h limit in %/min, and a **model suggestion** that tells you what to actually do: `one more opus session`, `switch to fable`, `stay on sonnet`, or `ease off`. Models you haven't measured yet get an estimate scaled from your best-measured model by Anthropic's API price ratio (Haiku : Sonnet : Opus : Fable = 1 : 3 : 5 : 10), shown as `(est)`; ~10 minutes of single-model usage with the monitor open replaces an estimate with your real measured rate.
+- **Per-model burn rates**: measures how fast each Claude model (Haiku, Sonnet, Opus, Fable) empirically burns the 5h limit in %/min, and a **model suggestion** that only appears when there's actually something to act on — `one more opus session` when you're under pace, `switch to fable`/`ease off` when you're over. At `AT` pace the whole section is hidden: there's nothing to suggest when you're already right on track. Models you haven't measured yet get an estimate scaled from your best-measured model by Anthropic's API price ratio (Haiku : Sonnet : Opus : Fable = 1 : 3 : 5 : 10), shown as `(est)`; ~10 minutes of single-model usage with the monitor open replaces an estimate with your real measured rate.
 - A **hot-session suggestion**: whenever pace is `ABOVE`, scans your open Claude Code sessions for the one burning the most tokens/min in the last 5 minutes and names it directly — `switch claudemaxxing (2e2d1b34) to haiku` or, if no lighter model would help, `kill claudemaxxing (2e2d1b34) - heaviest session`. This is a suggestion only; the dashboard never touches your sessions.
 - A **GitHub-commit-graph-style heatmap**: one cube per completed 5-hour window, shaded from grey (no usage) to green (100% peak usage), with a timeline underneath. Persists permanently across restarts so your history keeps building.
 - A rotating **fake philosopher quote**, scoped to whichever pace state is active — nudges to use more when you're under, mockery of excess when you're over, wisdom about the middle way when you're right on pace. Each of the 26 philosophers has a fixed, anachronistic tech job title (Marcus Aurelius, Head of Stoic Philosophy @ McKinsey; Kafka, Founding Engineer @ Apache Kafka; Kant, Head of Multimodal Research @ Anthropic)
@@ -63,7 +63,7 @@ Four things worth knowing:
 - [Claude Code](https://claude.ai/code)
 - `rich` (installed automatically by `install.sh`)
 
-115 tests covering the pace math, multi-session merge logic, per-model burn attribution, hot-session detection, and file I/O — `pytest` (dev only, not needed to run the tool).
+121 tests covering the pace math, multi-session merge logic, per-model burn attribution, hot-session detection, and file I/O — `pytest` (dev only, not needed to run the tool).
 
 ## License
 
