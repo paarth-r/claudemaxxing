@@ -26,8 +26,10 @@ loop (no new processes; the statusline hook is untouched and stays fast).
 1. Read consecutive pairs of usage samples from `history.jsonl`. Each pair is
    an interval: `(t0, t1, delta_pct)` within one 5h window.
 2. Skip intervals already processed (see cursor, below), intervals that span a
-   window reset (`resets_at` differs — usage% snaps back to ~0 there), and
-   zero-duration intervals.
+   window reset (`resets_at` differs — usage% snaps back to ~0 there),
+   zero-duration intervals, and intervals longer than 20 minutes:
+   `history.jsonl` records change events, so a 1% tick after a long idle
+   stretch spans the idle time and would dilute the measured rate.
 3. For each remaining interval, scan the Claude Code transcripts under
    `~/.claude/projects` (reusing `stats.py`'s doubling tail-reader) and bucket
    token counts by `message.model` for messages timestamped inside the
@@ -87,19 +89,22 @@ Definitions:
 Decision, in order (pace states reuse the existing badge thresholds):
 
 1. No eligible models → `collecting data`.
-2. **BELOW pace**: walk eligible models heaviest-first (fable, opus, sonnet,
-   haiku). If `surplus_pct ≥ rate(m) × NOMINAL_SESSION_MINUTES`, suggest
-   `one more {m} session`. If no model's session fits but some eligible
-   model heavier than `current_model` has a rate closer to `ideal` than
-   `actual` is, suggest `switch to {m}`. Otherwise `stay on {current}`.
+2. **BELOW pace**: walk eligible models heaviest-first. If
+   `surplus_pct ≥ rate(m) × NOMINAL_SESSION_MINUTES`, suggest
+   `one more {m} session`. If no model's session fits but some eligible model
+   other than `current_model` has `rate(m) > actual` and a rate closer to
+   `ideal` than `actual` is, suggest `switch to {m}` (the closest such).
+   Otherwise `stay on {current}`.
 3. **ABOVE pace**: suggest `switch to {m}` where `m` is the heaviest eligible
-   model with `rate(m) ≤ ideal`. If none qualifies, `ease off — even haiku
-   overshoots`.
+   model with `rate(m) ≤ ideal` (phrased `stay on {m}` when that is already
+   the current model). If none qualifies, `ease off - even {lightest}
+   overshoots`, naming the lightest measured model.
 4. **AT pace**: `stay on {current_model}` (falls back to the eligible model
    closest to ideal when current_model is unknown).
 
-Heaviness order is fixed: fable > opus > sonnet > haiku; unrecognized models
-sort by their measured rate.
+Heaviness is the measured burn rate, descending — empirical rate ordering is
+what heaviness means for the limit, and it handles unknown model ids with no
+special casing.
 
 ## UI
 
