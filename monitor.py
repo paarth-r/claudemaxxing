@@ -18,7 +18,7 @@ from pace import (
 from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote, format_attribution
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
-from model_burn import gather_model_stats, suggest
+from model_burn import gather_model_stats, suggest, apply_estimates
 
 QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
 PACE_HINTS = {"ABOVE": "ease off", "AT": "right on pace", "BELOW": "use more"}
@@ -149,19 +149,21 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
         lines.append(Text(stats_text, style="bold"))
 
     if model_stats is not None:
-        averages = model_stats["averages"]
+        rates = apply_estimates(model_stats["averages"])
         suggest_prefix = "\n"  # keep panel spacing when there is no burn line yet
-        if averages:
-            by_rate = sorted(averages.items(), key=lambda kv: kv[1]["rate"], reverse=True)
+        if rates:
+            by_rate = sorted(rates.items(), key=lambda kv: kv[1]["rate"], reverse=True)
             burn_text = "Model burn: " + "   ".join(
-                "{} {:.2f}%/min ({:.0f}m)".format(m, a["rate"], a["minutes"])
+                "{} {:.2f}%/min ({})".format(
+                    m, a["rate"], "est" if a["estimated"] else "{:.0f}m".format(a["minutes"])
+                )
                 for m, a in by_rate
             )
             lines.append(Text("\n" + burn_text, style="bold"))
             suggest_prefix = ""
         suggestion = suggest(
             pace, info["ideal_rate"], info["current_rate"], used_pct,
-            (resets_at - now) / 60, model_stats["current_model"], averages,
+            (resets_at - now) / 60, model_stats["current_model"], rates,
         )
         if suggestion == "collecting data":
             suggestion_style = "dim"

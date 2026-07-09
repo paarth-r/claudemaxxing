@@ -99,6 +99,42 @@ def eligible_models(averages):
     return {m: a for m, a in averages.items() if a["minutes"] >= MIN_ELIGIBLE_MINUTES}
 
 
+# Relative limit-burn weights from API pricing (2026-07, $/MTok input: haiku 1,
+# sonnet 3, opus 5, fable 10 - output pricing has the identical ratio). Used to
+# estimate unmeasured models' rates by scaling from a measured anchor; real
+# measurements replace estimates as they accumulate.
+PRICE_WEIGHTS = {"haiku": 1.0, "sonnet": 3.0, "opus": 5.0, "fable": 10.0}
+
+
+def apply_estimates(averages):
+    """Blend measured burn rates with pricing-ratio estimates. Models with
+    enough clean minutes keep their measured rate; the rest get an estimate
+    scaled from the best-measured anchor. Returns {} until some weighted
+    model has enough data to anchor on - a %/min rate depends on the user's
+    plan and workload, so there is no absolute prior to fall back to."""
+    eligible = eligible_models(averages)
+    anchors = {m: a for m, a in eligible.items() if m in PRICE_WEIGHTS}
+    if not anchors:
+        return {}
+    anchor = max(anchors, key=lambda m: anchors[m]["minutes"])
+    unit_rate = anchors[anchor]["rate"] / PRICE_WEIGHTS[anchor]
+
+    blended = {}
+    for model, weight in PRICE_WEIGHTS.items():
+        if model in eligible:
+            blended[model] = {"rate": eligible[model]["rate"],
+                              "minutes": eligible[model]["minutes"],
+                              "estimated": False}
+        else:
+            blended[model] = {"rate": unit_rate * weight,
+                              "minutes": averages.get(model, {}).get("minutes", 0.0),
+                              "estimated": True}
+    for model, a in eligible.items():
+        if model not in blended:
+            blended[model] = {"rate": a["rate"], "minutes": a["minutes"], "estimated": False}
+    return blended
+
+
 def detect_current_model(token_samples, now, lookback_seconds=CURRENT_MODEL_LOOKBACK_SECONDS):
     by_model = {}
     for ts, tokens, model in token_samples:
@@ -119,11 +155,12 @@ def _stay(current_model, eligible, ideal_rate):
     return "stay on {}".format(closest)
 
 
-def suggest(pace, ideal_rate, current_rate, used_pct, remaining_minutes, current_model, averages):
+def suggest(pace, ideal_rate, current_rate, used_pct, remaining_minutes, current_model, rates):
     """Turn per-model burn rates into an action. 'Heavier' means a higher
-    measured burn rate - that is what heaviness means for the limit, and it
-    needs no hardcoded ladder for unknown model ids."""
-    eligible = eligible_models(averages)
+    burn rate - that is what heaviness means for the limit, and it needs no
+    hardcoded ladder for unknown model ids. rates comes from apply_estimates,
+    which already gated on data quality (measured or pricing-ratio estimate)."""
+    eligible = rates
     if not eligible:
         return "collecting data"
     by_rate_desc = sorted(eligible, key=lambda m: eligible[m]["rate"], reverse=True)

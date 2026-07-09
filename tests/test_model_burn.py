@@ -109,7 +109,7 @@ def test_detect_current_model_none_when_quiet():
     assert detect_current_model([], now=1000) is None
 
 
-from model_burn import suggest
+from model_burn import suggest, apply_estimates
 
 AVGS = {
     "fable":  {"rate": 0.9, "minutes": 60.0},
@@ -118,10 +118,41 @@ AVGS = {
     "haiku":  {"rate": 0.05, "minutes": 60.0},
 }
 
-def test_suggest_collecting_data_when_nothing_eligible():
-    sparse = {"fable": {"rate": 0.9, "minutes": 2.0}}
-    assert suggest("BELOW", 0.5, 0.1, 20, 120, "fable", sparse) == "collecting data"
+def test_apply_estimates_scales_unmeasured_models_from_anchor():
+    # sonnet measured at 0.36%/min with enough minutes; price weights are
+    # haiku 1 : sonnet 3 : opus 5 : fable 10, so unit = 0.12
+    averages = {"sonnet": {"rate": 0.36, "minutes": 31.0},
+                "opus": {"rate": 4.8, "minutes": 1.0}}  # noisy, sub-eligible
+    blended = apply_estimates(averages)
+    assert blended["sonnet"] == {"rate": 0.36, "minutes": 31.0, "estimated": False}
+    assert blended["opus"]["estimated"] is True
+    assert abs(blended["opus"]["rate"] - 0.6) < 1e-9  # estimate replaces the 4.8 noise
+    assert abs(blended["fable"]["rate"] - 1.2) < 1e-9
+    assert abs(blended["haiku"]["rate"] - 0.12) < 1e-9
+
+def test_apply_estimates_prefers_the_best_measured_anchor():
+    averages = {"sonnet": {"rate": 0.3, "minutes": 60.0},
+                "opus": {"rate": 0.5, "minutes": 20.0}}
+    blended = apply_estimates(averages)
+    # both eligible and measured; estimates for the rest anchor on sonnet (most minutes)
+    assert blended["opus"] == {"rate": 0.5, "minutes": 20.0, "estimated": False}
+    assert abs(blended["fable"]["rate"] - 1.0) < 1e-9  # 0.3/3 * 10
+
+def test_apply_estimates_no_anchor_yields_nothing():
+    assert apply_estimates({"fable": {"rate": 0.9, "minutes": 2.0}}) == {}
+    assert apply_estimates({}) == {}
+
+def test_apply_estimates_keeps_measured_unknown_models():
+    averages = {"sonnet": {"rate": 0.3, "minutes": 60.0},
+                "claude-newthing-9": {"rate": 0.7, "minutes": 15.0}}
+    blended = apply_estimates(averages)
+    assert blended["claude-newthing-9"] == {"rate": 0.7, "minutes": 15.0, "estimated": False}
+
+def test_suggest_collecting_data_when_no_rates():
     assert suggest("BELOW", 0.5, 0.1, 20, 120, None, {}) == "collecting data"
+    # composition: sparse measurements with no eligible anchor -> no rates
+    sparse = apply_estimates({"fable": {"rate": 0.9, "minutes": 2.0}})
+    assert suggest("BELOW", 0.5, 0.1, 20, 120, "fable", sparse) == "collecting data"
 
 def test_suggest_below_one_more_session_of_heaviest_that_fits():
     # used 20%, rate 0.1%/min, 120m left -> surplus = 80 - 12 = 68%
