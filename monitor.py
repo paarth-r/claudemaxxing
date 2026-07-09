@@ -67,7 +67,7 @@ def render_heatmap(window_history, current_peak_pct, current_window_end, now):
 def render(state, history, last_quote, live_stats=None, window_history=None):
     if state is None:
         return Panel(Text("Waiting for first Claude Code render...", style="dim"),
-                      title="claudemaxxing")
+                      title="claudemaxxing", height=console.height)
 
     used_pct = state["used_percentage"]
     resets_at = state["resets_at"]
@@ -117,10 +117,11 @@ def render(state, history, last_quote, live_stats=None, window_history=None):
         quote_text, philosopher = last_quote
         lines.append(Text("\n· \"{}\" —{} ·".format(quote_text, philosopher), style="dim italic"))
 
-    return Panel(Group(*lines), title="claudemaxxing (5h window)")
+    return Panel(Group(*lines), title="claudemaxxing (5h window)", height=console.height)
 
 
 def main():
+    console.clear()
     last_pace = None
     last_quote = None
 
