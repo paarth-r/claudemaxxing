@@ -18,6 +18,7 @@ from pace import (
 from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote, format_attribution
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
+from model_burn import gather_model_stats, suggest
 
 QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
 PACE_HINTS = {"ABOVE": "ease off", "AT": "right on pace", "BELOW": "use more"}
@@ -88,7 +89,7 @@ def render_heatmap(window_history, current_peak_pct, current_window_end, now):
     return cube_line, timeline
 
 
-def render(state, history, last_quote, live_stats=None, window_history=None):
+def render(state, history, last_quote, live_stats=None, window_history=None, model_stats=None):
     if state is None:
         return Panel(Text("Waiting for first Claude Code render...", style="dim"),
                       title="claudemaxxing", height=console.height)
@@ -147,6 +148,28 @@ def render(state, history, last_quote, live_stats=None, window_history=None):
         )
         lines.append(Text(stats_text, style="bold"))
 
+    if model_stats is not None:
+        averages = model_stats["averages"]
+        suggest_prefix = "\n"  # keep panel spacing when there is no burn line yet
+        if averages:
+            by_rate = sorted(averages.items(), key=lambda kv: kv[1]["rate"], reverse=True)
+            burn_text = "Model burn: " + "   ".join(
+                "{} {:.2f}%/min ({:.0f}m)".format(m, a["rate"], a["minutes"])
+                for m, a in by_rate
+            )
+            lines.append(Text("\n" + burn_text, style="bold"))
+            suggest_prefix = ""
+        suggestion = suggest(
+            pace, info["ideal_rate"], info["current_rate"], used_pct,
+            (resets_at - now) / 60, model_stats["current_model"], averages,
+        )
+        if suggestion == "collecting data":
+            suggestion_style = "dim"
+        else:
+            suggestion_style = "bold {}".format(pace_color(pace))
+        lines.append(Text("{}SUGGEST: {}".format(suggest_prefix, suggestion),
+                          style=suggestion_style))
+
     if last_quote:
         quote_text, philosopher = last_quote
         lines.append(Text(
@@ -171,6 +194,10 @@ def main():
                 "tokens_per_minute": tokens_per_minute(),
                 "active_sessions": count_active_claude_sessions(),
             }
+            try:
+                model_stats = gather_model_stats(history, time.time())
+            except Exception:
+                model_stats = None  # measurement must never take down the dashboard
 
             if state is not None:
                 now = time.time()
@@ -179,7 +206,7 @@ def main():
                     last_quote = pick_quote(QUOTE_POOLS[pace])
                     last_pace = pace
 
-            live.update(render(state, history, last_quote, live_stats, window_history))
+            live.update(render(state, history, last_quote, live_stats, window_history, model_stats))
             time.sleep(POLL_SECONDS)
 
 
