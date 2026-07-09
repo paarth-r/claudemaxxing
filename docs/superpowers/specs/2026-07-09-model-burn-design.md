@@ -11,6 +11,27 @@ already uses (usage% per minute), and turn that into an actionable suggestion
 like `one more opus session` or `switch to fable` so the user lands at exactly
 100% when the window resets.
 
+## Hot-session suggestion (addendum, 2026-07-09)
+
+The aggregate model suggestion says what to do in general ("switch to X");
+it can't point at a specific open terminal. When pace is `ABOVE`,
+`stats.session_snapshots()` scans transcript files for token activity in the
+trailing 5 minutes, grouped per session (one entry per `.jsonl` file), and
+`model_burn.heaviest_session()` picks the single session with the most
+tokens — the one worth naming. `suggest_hot_session_action()` then prefers
+`switch {project} ({session_id[:8]}) to {model}` when a lighter model would
+fit the ideal rate, falling back to `kill {project} ({session_id[:8]}) -
+heaviest session` when no model would help (unknown rates, or the session
+is already on the lightest fit). This is a suggestion only — the dashboard
+never touches processes or files belonging to another session.
+
+Session labels use the `cwd` field each transcript line already carries,
+not Claude Code's on-disk project directory name — that name encodes the
+session's full absolute path with `/` replaced by `-` (e.g.
+`-Users-x-Code-myrepo`), which reads as noise. `os.path.basename(cwd)` falls
+back to the encoded directory name only if no line in the window carries a
+`cwd`.
+
 ## What "burn rate" means
 
 The 5h limit's `used_percentage` is model-weighted: heavier models consume the

@@ -20,6 +20,7 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 - A **sparkline** of your usage trend across the current window
 - Real-time **tokens/min** (from your actual Claude Code transcripts, excluding cache-read overhead so it reflects real new work) and a count of **active Claude Code sessions** running right now
 - **Per-model burn rates**: measures how fast each Claude model (Haiku, Sonnet, Opus, Fable) empirically burns the 5h limit in %/min, and a **model suggestion** that tells you what to actually do: `one more opus session`, `switch to fable`, `stay on sonnet`, or `ease off`. Models you haven't measured yet get an estimate scaled from your best-measured model by Anthropic's API price ratio (Haiku : Sonnet : Opus : Fable = 1 : 3 : 5 : 10), shown as `(est)`; ~10 minutes of single-model usage with the monitor open replaces an estimate with your real measured rate.
+- A **hot-session suggestion**: whenever pace is `ABOVE`, scans your open Claude Code sessions for the one burning the most tokens/min in the last 5 minutes and names it directly — `switch claudemaxxing (2e2d1b34) to haiku` or, if no lighter model would help, `kill claudemaxxing (2e2d1b34) - heaviest session`. This is a suggestion only; the dashboard never touches your sessions.
 - A **GitHub-commit-graph-style heatmap**: one cube per completed 5-hour window, shaded from grey (no usage) to green (100% peak usage), with a timeline underneath. Persists permanently across restarts so your history keeps building.
 - A rotating **fake philosopher quote**, scoped to whichever pace state is active — nudges to use more when you're under, mockery of excess when you're over, wisdom about the middle way when you're right on pace. Each of the 26 philosophers has a fixed, anachronistic tech job title (Marcus Aurelius, Head of Stoic Philosophy @ McKinsey; Kafka, Founding Engineer @ Apache Kafka; Kant, Head of Multimodal Research @ Anthropic)
 - Works across multiple open Claude Code sessions/terminals: they all converge on the same number instead of each showing their own stale local reading
@@ -53,6 +54,7 @@ Four things worth knowing:
 - If a session's own last-known reading lags behind another session's, the hook always reconciles toward the more advanced (higher, or newer-window) value, so every open session's statusline — and the dashboard — shows the same number. A lagging session reporting an *older* window is rejected outright, so it can't regress the shared state backward.
 - Pace is a rate comparison, not a snapshot: it looks at your usage% change over the last ~15 minutes to get a real %/min rate, compares it against `(100% − used%) / minutes remaining`, and both sides shift continuously as you use Claude and time passes.
 - Per-model burn attribution is conservative: a usage% delta only becomes a measurement when exactly one model was generating tokens during that interval (checked against your local transcripts). Mixed-model intervals and long idle gaps are discarded rather than guessed at. Samples persist forever in `~/.claude/usage-monitor/model_burn.jsonl`, so the averages keep sharpening across restarts.
+- The hot-session suggestion identifies sessions by scanning transcript files, using the `cwd` each session recorded rather than Claude Code's on-disk directory naming (which encodes the full path with `/` → `-` and isn't readable). It picks the single project + session id with the highest token/min in the trailing 5 minutes — not a list, since only the worst offender is actionable.
 - If no Claude Code session is open at all, the dashboard shows a dimmed `STALE` badge rather than pretending the data is current.
 
 ## Requirements
@@ -61,7 +63,7 @@ Four things worth knowing:
 - [Claude Code](https://claude.ai/code)
 - `rich` (installed automatically by `install.sh`)
 
-96 tests covering the pace math, multi-session merge logic, per-model burn attribution, and file I/O — `pytest` (dev only, not needed to run the tool).
+115 tests covering the pace math, multi-session merge logic, per-model burn attribution, hot-session detection, and file I/O — `pytest` (dev only, not needed to run the tool).
 
 ## License
 
