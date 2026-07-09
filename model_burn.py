@@ -154,3 +154,30 @@ def suggest(pace, ideal_rate, current_rate, used_pct, remaining_minutes, current
         return "ease off - even {} overshoots".format(lightest)
 
     return _stay(current_model, eligible, ideal_rate)
+
+
+def gather_model_stats(history, now, burn_path=MODEL_BURN_PATH,
+                       cursor_path=MODEL_BURN_CURSOR_PATH,
+                       token_samples_fn=recent_token_samples):
+    """One monitor tick: turn newly-completed usage intervals into permanent
+    clean burn samples, advance the cursor (mixed/zero intervals are consumed
+    too - never rescanned), and return fresh averages + the current model."""
+    cursor = read_state(path=cursor_path) or {}
+    intervals = build_intervals(history, cursor.get("last_processed", 0))
+
+    cutoff = now - CURRENT_MODEL_LOOKBACK_SECONDS
+    if intervals:
+        cutoff = min(cutoff, intervals[0]["t0"])
+    token_samples = token_samples_fn(cutoff=cutoff)
+
+    for interval in intervals:
+        clean = attribute_interval(interval, token_samples)
+        if clean is not None:
+            append_history(clean, path=burn_path)
+    if intervals:
+        write_state({"last_processed": max(i["t1"] for i in intervals)}, path=cursor_path)
+
+    return {
+        "averages": compute_averages(read_history(path=burn_path)),
+        "current_model": detect_current_model(token_samples, now),
+    }

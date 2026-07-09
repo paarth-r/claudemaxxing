@@ -160,3 +160,48 @@ def test_suggest_at_stays_on_current():
 
 def test_suggest_at_unknown_current_falls_back_to_closest_to_ideal():
     assert suggest("AT", 0.5, 0.5, 50, 100, None, AVGS) == "stay on opus"
+
+
+from model_burn import gather_model_stats
+from state_io import read_history as read_burn_history
+
+def test_gather_model_stats_persists_clean_samples_and_advances_cursor(tmp_path):
+    burn_path = str(tmp_path / "model_burn.jsonl")
+    cursor_path = str(tmp_path / "cursor.json")
+    history = [_h(100, 10), _h(160, 11)]
+    tokens = [(120, 500, "claude-opus-4-8")]
+
+    result = gather_model_stats(history, now=200, burn_path=burn_path,
+                                cursor_path=cursor_path, token_samples_fn=lambda cutoff: tokens)
+    stored = read_burn_history(path=burn_path)
+    assert len(stored) == 1 and stored[0]["model"] == "opus"
+    assert result["current_model"] == "opus"
+    assert result["averages"]["opus"]["rate"] == 1.0
+
+    # Second call with unchanged history: cursor prevents double-counting.
+    gather_model_stats(history, now=260, burn_path=burn_path,
+                       cursor_path=cursor_path, token_samples_fn=lambda cutoff: tokens)
+    assert len(read_burn_history(path=burn_path)) == 1
+
+def test_gather_model_stats_discards_mixed_intervals_but_still_advances(tmp_path):
+    burn_path = str(tmp_path / "model_burn.jsonl")
+    cursor_path = str(tmp_path / "cursor.json")
+    history = [_h(100, 10), _h(160, 11)]
+    tokens = [(120, 500, "claude-opus-4-8"), (130, 500, "claude-sonnet-5")]
+
+    gather_model_stats(history, now=200, burn_path=burn_path,
+                       cursor_path=cursor_path, token_samples_fn=lambda cutoff: tokens)
+    assert read_burn_history(path=burn_path) == []
+    # New interval later gets processed; the old mixed one is never rescanned.
+    history.append(_h(220, 12))
+    gather_model_stats(history, now=300, burn_path=burn_path,
+                       cursor_path=cursor_path, token_samples_fn=lambda cutoff: [(180, 100, "claude-opus-4-8")])
+    stored = read_burn_history(path=burn_path)
+    assert len(stored) == 1 and stored[0]["t0"] == 160
+
+def test_gather_model_stats_empty_history(tmp_path):
+    result = gather_model_stats([], now=200,
+                                burn_path=str(tmp_path / "b.jsonl"),
+                                cursor_path=str(tmp_path / "c.json"),
+                                token_samples_fn=lambda cutoff: [])
+    assert result == {"averages": {}, "current_model": None}
