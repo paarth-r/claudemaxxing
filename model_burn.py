@@ -78,3 +78,35 @@ def attribute_interval(interval, token_samples):
         "t0": interval["t0"],
         "t1": interval["t1"],
     }
+
+
+def compute_averages(samples):
+    """Duration-weighted average burn rate per model: sum(delta) / sum(minutes).
+    Robust to the ~1% granularity of used_percentage - individual samples are
+    coarse, but the aggregate converges."""
+    totals = {}
+    for s in samples:
+        delta, minutes = totals.get(s["model"], (0.0, 0.0))
+        totals[s["model"]] = (delta + s["delta_pct"], minutes + s["duration_minutes"])
+    return {
+        model: {"rate": delta / minutes, "minutes": minutes}
+        for model, (delta, minutes) in totals.items()
+        if minutes > 0
+    }
+
+
+def eligible_models(averages):
+    return {m: a for m, a in averages.items() if a["minutes"] >= MIN_ELIGIBLE_MINUTES}
+
+
+def detect_current_model(token_samples, now, lookback_seconds=CURRENT_MODEL_LOOKBACK_SECONDS):
+    by_model = {}
+    for ts, tokens, model in token_samples:
+        if now - ts > lookback_seconds or tokens <= 0:
+            continue
+        short = normalize_model_id(model)
+        if short is not None:
+            by_model[short] = by_model.get(short, 0) + tokens
+    if not by_model:
+        return None
+    return max(by_model, key=by_model.get)

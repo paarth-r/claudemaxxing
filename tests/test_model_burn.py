@@ -75,3 +75,35 @@ def test_attribute_interval_ignores_model_less_samples():
     samples = [(120, 500, "claude-fable-5"), (130, 100, None)]
     result = attribute_interval(INTERVAL, samples)
     assert result["model"] == "fable" and result["tokens"] == 500
+
+
+from model_burn import compute_averages, eligible_models, detect_current_model
+
+def _burn(model, delta, minutes):
+    return {"model": model, "delta_pct": delta, "duration_minutes": minutes,
+            "tokens": 100, "t0": 0, "t1": 0}
+
+def test_compute_averages_is_duration_weighted():
+    samples = [_burn("fable", 1, 1.0), _burn("fable", 5, 9.0), _burn("haiku", 1, 10.0)]
+    averages = compute_averages(samples)
+    assert averages["fable"] == {"rate": 0.6, "minutes": 10.0}  # 6% over 10m, not mean(1, 5/9)
+    assert averages["haiku"] == {"rate": 0.1, "minutes": 10.0}
+
+def test_compute_averages_empty():
+    assert compute_averages([]) == {}
+
+def test_eligible_models_requires_minimum_minutes():
+    averages = {"fable": {"rate": 0.6, "minutes": 10.0}, "opus": {"rate": 0.4, "minutes": 9.9}}
+    assert list(eligible_models(averages)) == ["fable"]
+
+def test_detect_current_model_picks_dominant_recent_model():
+    now = 1000
+    samples = [
+        (now - 30, 500, "claude-fable-5"),
+        (now - 60, 100, "claude-sonnet-5"),
+        (now - 700, 9999, "claude-opus-4-8"),  # outside 600s lookback
+    ]
+    assert detect_current_model(samples, now) == "fable"
+
+def test_detect_current_model_none_when_quiet():
+    assert detect_current_model([], now=1000) is None
