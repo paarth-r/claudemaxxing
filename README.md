@@ -1,19 +1,21 @@
 # claudemaxxing
 
-A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you're on pace to hit 100% before it resets. Comes with commentary from history's greatest philosophers, who have opinions about your subagent usage.
+A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and tells you whether you should be using Claude *more*, *less*, or you're right on pace to use your whole allowance with nothing left over. Comes with commentary from history's greatest philosophers, who have opinions about your subagent usage.
 
 ![claudemaxxing screenshot](docs/assets/screenshot.png)
 
 ## What it does
 
 - Live progress bars for **usage% used** and **% of the 5-hour window elapsed**
-- A **pace badge** (`ABOVE` / `AT` / `BELOW`) telling you whether you're burning faster or slower than time is passing
+- A real **Rate vs. Ideal** comparison: your actual recent %/min consumption rate against the ideal %/min that would land you at exactly 100% right when the window resets — recalculated live every refresh, not a static snapshot
+- A **pace badge** (`ABOVE` / `AT` / `BELOW`) that tells you plainly whether to **ease off**, **use more**, or you're **right on pace**
+- A **"Resets in" countdown** to your next window
 - A **sparkline** of your usage trend across the current window
-- Real-time **tokens/min** (from your actual Claude Code transcripts) and a count of **active Claude Code sessions** running right now
-- A **GitHub-commit-graph-style heatmap**: one cube per completed 5-hour window, shaded from grey (no usage) to green (100% peak usage), with a timeline underneath. Persists across restarts so your history keeps building.
-- A rotating **fake philosopher quote** — wisdom about restraint when you're pacing fine, mockery of excess when you're not
+- Real-time **tokens/min** (from your actual Claude Code transcripts, excluding cache-read overhead so it reflects real new work) and a count of **active Claude Code sessions** running right now
+- A **GitHub-commit-graph-style heatmap**: one cube per completed 5-hour window, shaded from grey (no usage) to green (100% peak usage), with a timeline underneath. Persists permanently across restarts so your history keeps building.
+- A rotating **fake philosopher quote**, scoped to whichever pace state is active — nudges to use more when you're under, mockery of excess when you're over, wisdom about the middle way when you're right on pace
 - Works across multiple open Claude Code sessions/terminals: they all converge on the same number instead of each showing their own stale local reading
-- Refreshes once a minute
+- Clears the terminal and fills the full window height on start; refreshes once a minute
 
 ## Install
 
@@ -39,8 +41,9 @@ Anthropic doesn't expose a public "check my usage" API. Claude Code itself compu
 
 This project's statusline hook (`usage_statusline.py`) captures that data into a shared local file every time any Claude Code session renders, instead of making any direct calls to Anthropic's API. A separate long-running TUI (`monitor.py`) polls that file once a minute and draws the dashboard.
 
-Two things worth knowing:
-- If a session's own last-known reading lags behind another session's, the hook always reconciles toward the more advanced (higher, or newer-window) value, so every open session's statusline — and the dashboard — shows the same number.
+Three things worth knowing:
+- If a session's own last-known reading lags behind another session's, the hook always reconciles toward the more advanced (higher, or newer-window) value, so every open session's statusline — and the dashboard — shows the same number. A lagging session reporting an *older* window is rejected outright, so it can't regress the shared state backward.
+- Pace is a rate comparison, not a snapshot: it looks at your usage% change over the last ~15 minutes to get a real %/min rate, compares it against `(100% − used%) / minutes remaining`, and both sides shift continuously as you use Claude and time passes.
 - If no Claude Code session is open at all, the dashboard shows a dimmed `STALE` badge rather than pretending the data is current.
 
 ## Requirements
