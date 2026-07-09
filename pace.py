@@ -7,8 +7,38 @@ def compute_elapsed_percentage(resets_at, now, window_seconds=18000):
     return (1 - remaining / window_seconds) * 100
 
 
-def compute_pace(used_pct, elapsed_pct, deadband=3.0):
-    diff = used_pct - elapsed_pct
+def compute_ideal_rate(used_pct, remaining_seconds):
+    """%/min needed from now to land at exactly 100% used right when the
+    window resets - the rate that uses the whole allowance with none left over."""
+    remaining_minutes = remaining_seconds / 60
+    if remaining_minutes <= 0:
+        return 0.0
+    return max(0.0, 100.0 - used_pct) / remaining_minutes
+
+
+def compute_current_rate(history, current_used_pct, now, window_start, lookback_seconds=900):
+    """Recent %/min consumption rate. Prefers a trailing lookback window for
+    responsiveness; falls back to the whole-window-so-far average when there
+    isn't enough recent history yet for a stable reading."""
+    cutoff = max(window_start, now - lookback_seconds)
+    candidates = [s for s in history if s["timestamp"] >= cutoff]
+    if candidates:
+        earliest = min(candidates, key=lambda s: s["timestamp"])
+        dt_minutes = (now - earliest["timestamp"]) / 60
+        if dt_minutes >= 1:
+            return (current_used_pct - earliest["used_percentage"]) / dt_minutes
+
+    elapsed_minutes = (now - window_start) / 60
+    if elapsed_minutes <= 0:
+        return 0.0
+    return current_used_pct / elapsed_minutes
+
+
+def compute_pace(current_rate, ideal_rate, deadband_ratio=0.15, min_absolute_deadband=0.02):
+    if ideal_rate <= 0:
+        return "AT" if current_rate <= 0 else "ABOVE"
+    deadband = max(ideal_rate * deadband_ratio, min_absolute_deadband)
+    diff = current_rate - ideal_rate
     if diff > deadband:
         return "ABOVE"
     if diff < -deadband:

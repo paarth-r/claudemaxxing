@@ -7,18 +7,40 @@ from rich.panel import Panel
 from rich.text import Text
 
 from state_io import read_state, read_history, STATE_PATH, WINDOW_HISTORY_PATH
-from pace import compute_elapsed_percentage, compute_pace, is_stale, format_duration
+from pace import (
+    compute_elapsed_percentage,
+    compute_ideal_rate,
+    compute_current_rate,
+    compute_pace,
+    is_stale,
+    format_duration,
+)
 from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote
-
-QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
+
+QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
+PACE_HINTS = {"ABOVE": "ease off", "AT": "right on pace", "BELOW": "use more"}
 
 POLL_SECONDS = 60
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 BAR_WIDTH = 60
+WINDOW_SECONDS = 18000
 
 console = Console()
+
+
+def pace_info(state, history, now):
+    """Shared rate-based pace calculation: how fast you're actually using
+    tokens (%/min) vs. the ideal rate that would land at exactly 100% right
+    when the window resets."""
+    used_pct = state["used_percentage"]
+    resets_at = state["resets_at"]
+    window_start = resets_at - WINDOW_SECONDS
+    current_rate = compute_current_rate(history, used_pct, now, window_start)
+    ideal_rate = compute_ideal_rate(used_pct, resets_at - now)
+    pace = compute_pace(current_rate, ideal_rate)
+    return {"current_rate": current_rate, "ideal_rate": ideal_rate, "pace": pace}
 
 
 def sparkline(values):
@@ -75,7 +97,8 @@ def render(state, history, last_quote, live_stats=None, window_history=None):
     resets_at = state["resets_at"]
     now = time.time()
     elapsed_pct = compute_elapsed_percentage(resets_at, now)
-    pace = compute_pace(used_pct, elapsed_pct)
+    info = pace_info(state, history, now)
+    pace = info["pace"]
 
     lines = []
 
@@ -87,7 +110,16 @@ def render(state, history, last_quote, live_stats=None, window_history=None):
     elapsed_line.append(bar(elapsed_pct), style="magenta")
     lines.append(elapsed_line)
 
-    pace_line = Text("\nPace: {}".format(pace), style="bold {}".format(pace_color(pace)))
+    rate_line = Text(
+        "\nRate: {:.2f}%/min   Ideal: {:.2f}%/min".format(info["current_rate"], info["ideal_rate"]),
+        style="bold",
+    )
+    lines.append(rate_line)
+
+    pace_line = Text(
+        "Pace: {} ({})".format(pace, PACE_HINTS[pace]),
+        style="bold {}".format(pace_color(pace)),
+    )
     pace_line.append("   Resets in: {}".format(format_duration(resets_at - now)), style="dim")
     try:
         mtime = os.path.getmtime(STATE_PATH)
@@ -139,8 +171,7 @@ def main():
 
             if state is not None:
                 now = time.time()
-                elapsed_pct = compute_elapsed_percentage(state["resets_at"], now)
-                pace = compute_pace(state["used_percentage"], elapsed_pct)
+                pace = pace_info(state, history, now)["pace"]
                 if pace != last_pace:
                     last_quote = pick_quote(QUOTE_POOLS[pace])
                     last_pace = pace
