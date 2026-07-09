@@ -131,3 +131,22 @@ def test_session_snapshots_excludes_sessions_with_no_tokens_in_window(tmp_path):
 
 def test_session_snapshots_empty_projects_dir(tmp_path):
     assert session_snapshots(cutoff=time.time() - 300, projects_dir=str(tmp_path / "missing")) == []
+
+def test_session_snapshots_prefers_cwd_over_encoded_directory_name(tmp_path):
+    # Claude Code's on-disk project directories encode the full absolute
+    # path with "/" -> "-" (e.g. "-Users-x-Code-myrepo"), which is not a
+    # readable label. Each transcript line also carries a "cwd" field with
+    # the real path - basename(cwd) is what a user actually recognizes.
+    now = time.time()
+    project_dir = tmp_path / "-Users-x-Code-myrepo"
+    project_dir.mkdir(parents=True)
+    path = project_dir / "sess.jsonl"
+    with open(path, "w") as f:
+        import datetime
+        ts_str = datetime.datetime.utcfromtimestamp(now - 10).isoformat() + "Z"
+        f.write(json.dumps({
+            "timestamp": ts_str, "cwd": "/Users/x/Code/myrepo",
+            "message": {"role": "assistant", "usage": {"input_tokens": 5, "output_tokens": 5}},
+        }) + "\n")
+    snapshots = session_snapshots(cutoff=now - 300, projects_dir=str(tmp_path))
+    assert snapshots[0]["project"] == "myrepo"

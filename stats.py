@@ -121,7 +121,11 @@ def session_snapshots(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTES, 
     """One entry per transcript file with token activity since cutoff - lets
     the caller see which individual Claude Code session is driving usage,
     not just the aggregate. dominant_model is whichever model produced the
-    most tokens in-window for that session (None if none were attributed)."""
+    most tokens in-window for that session (None if none were attributed).
+    project prefers the transcript's own "cwd" field over the on-disk
+    project directory name, which Claude Code encodes as the full absolute
+    path with "/" -> "-" (e.g. "-Users-x-Code-myrepo") - not something a
+    user recognizes at a glance."""
     snapshots = []
     if not os.path.isdir(projects_dir):
         return snapshots
@@ -134,20 +138,48 @@ def session_snapshots(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTES, 
             try:
                 if os.path.getmtime(path) < cutoff:
                     continue
-                samples = _file_token_samples(path, cutoff, tail_bytes, max_tail_bytes)
+                raw_lines = _read_tail_lines(path, cutoff, tail_bytes, max_tail_bytes)
             except OSError:
                 continue
-            tokens = sum(t for _ts, t, _model in samples)
+
+            tokens = 0
+            model_totals = {}
+            cwd = None
+            for raw_line in raw_lines:
+                line = raw_line.decode("utf-8", errors="ignore").strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if cwd is None and isinstance(obj.get("cwd"), str):
+                    cwd = obj["cwd"]
+                message = obj.get("message")
+                if not isinstance(message, dict):
+                    continue
+                usage = message.get("usage")
+                if not isinstance(usage, dict):
+                    continue
+                ts = _parse_iso_timestamp(obj.get("timestamp"))
+                if ts is None or ts < cutoff:
+                    continue
+                total_tokens = (
+                    usage.get("input_tokens", 0)
+                    + usage.get("output_tokens", 0)
+                    + usage.get("cache_creation_input_tokens", 0)
+                )
+                tokens += total_tokens
+                model = message.get("model")
+                if model:
+                    model_totals[model] = model_totals.get(model, 0) + total_tokens
+
             if tokens <= 0:
                 continue
-            model_totals = {}
-            for _ts, t, model in samples:
-                if model:
-                    model_totals[model] = model_totals.get(model, 0) + t
             dominant_model = max(model_totals, key=model_totals.get) if model_totals else None
             snapshots.append({
                 "session_id": name[:-len(".jsonl")],
-                "project": os.path.basename(root),
+                "project": os.path.basename(cwd) if cwd else os.path.basename(root),
                 "tokens": tokens,
                 "dominant_model": dominant_model,
             })
