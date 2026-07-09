@@ -199,6 +199,20 @@ def test_gather_model_stats_discards_mixed_intervals_but_still_advances(tmp_path
     stored = read_burn_history(path=burn_path)
     assert len(stored) == 1 and stored[0]["t0"] == 160
 
+def test_gather_model_stats_recovers_from_lost_cursor_without_duplicates(tmp_path):
+    # A corrupt/deleted cursor must not double-count: re-mined intervals that
+    # are already stored get skipped by their (t0, t1) identity.
+    burn_path = str(tmp_path / "model_burn.jsonl")
+    cursor_path = str(tmp_path / "cursor.json")
+    history = [_h(100, 10), _h(160, 11)]
+    tokens = [(120, 500, "claude-opus-4-8")]
+    gather_model_stats(history, now=200, burn_path=burn_path,
+                       cursor_path=cursor_path, token_samples_fn=lambda cutoff: tokens)
+    os.remove(cursor_path)
+    gather_model_stats(history, now=260, burn_path=burn_path,
+                       cursor_path=cursor_path, token_samples_fn=lambda cutoff: tokens)
+    assert len(read_burn_history(path=burn_path)) == 1
+
 def test_gather_model_stats_empty_history(tmp_path):
     result = gather_model_stats([], now=200,
                                 burn_path=str(tmp_path / "b.jsonl"),

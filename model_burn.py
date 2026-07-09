@@ -170,14 +170,22 @@ def gather_model_stats(history, now, burn_path=MODEL_BURN_PATH,
         cutoff = min(cutoff, intervals[0]["t0"])
     token_samples = token_samples_fn(cutoff=cutoff)
 
+    # (t0, t1) identity guards against double-counting when the cursor is
+    # lost or corrupt and old intervals get re-mined - the burn file is read
+    # every tick for the averages anyway, so this costs nothing extra.
+    stored = read_history(path=burn_path)
+    seen = {(s.get("t0"), s.get("t1")) for s in stored}
     for interval in intervals:
+        if (interval["t0"], interval["t1"]) in seen:
+            continue
         clean = attribute_interval(interval, token_samples)
         if clean is not None:
             append_history(clean, path=burn_path)
+            stored.append(clean)
     if intervals:
         write_state({"last_processed": max(i["t1"] for i in intervals)}, path=cursor_path)
 
     return {
-        "averages": compute_averages(read_history(path=burn_path)),
+        "averages": compute_averages(stored),
         "current_model": detect_current_model(token_samples, now),
     }
