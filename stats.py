@@ -63,9 +63,42 @@ def _read_tail_lines(path, cutoff, initial_bytes, max_bytes):
         read_size = min(read_size * 4, size, max_bytes)
 
 
+def _file_token_samples(path, cutoff, tail_bytes, max_tail_bytes):
+    """(timestamp, token_count, model) samples newer than cutoff in one
+    transcript file. Deliberately excludes cache_read_input_tokens: that
+    field re-bills the entire cached context on every message and stays
+    huge/roughly-constant for a long conversation, drowning out the actual
+    new-work signal."""
+    samples = []
+    for raw_line in _read_tail_lines(path, cutoff, tail_bytes, max_tail_bytes):
+        line = raw_line.decode("utf-8", errors="ignore").strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        message = obj.get("message")
+        if not isinstance(message, dict):
+            continue
+        usage = message.get("usage")
+        if not isinstance(usage, dict):
+            continue
+        ts = _parse_iso_timestamp(obj.get("timestamp"))
+        if ts is None or ts < cutoff:
+            continue
+        total_tokens = (
+            usage.get("input_tokens", 0)
+            + usage.get("output_tokens", 0)
+            + usage.get("cache_creation_input_tokens", 0)
+        )
+        samples.append((ts, total_tokens, message.get("model")))
+    return samples
+
+
 def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTES, max_tail_bytes=MAX_TAIL_BYTES):
-    """Scan recently-modified transcript files for (timestamp, token_count)
-    samples newer than cutoff."""
+    """Scan recently-modified transcript files for (timestamp, token_count,
+    model) samples newer than cutoff, flattened across all sessions."""
     samples = []
     if not os.path.isdir(projects_dir):
         return samples
@@ -78,36 +111,47 @@ def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTE
             try:
                 if os.path.getmtime(path) < cutoff:
                     continue
-                for raw_line in _read_tail_lines(path, cutoff, tail_bytes, max_tail_bytes):
-                    line = raw_line.decode("utf-8", errors="ignore").strip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    message = obj.get("message")
-                    if not isinstance(message, dict):
-                        continue
-                    usage = message.get("usage")
-                    if not isinstance(usage, dict):
-                        continue
-                    ts = _parse_iso_timestamp(obj.get("timestamp"))
-                    if ts is None or ts < cutoff:
-                        continue
-                    # Deliberately excludes cache_read_input_tokens: that
-                    # field re-bills the entire cached context on every
-                    # message and stays huge/roughly-constant for a long
-                    # conversation, drowning out the actual new-work signal.
-                    total_tokens = (
-                        usage.get("input_tokens", 0)
-                        + usage.get("output_tokens", 0)
-                        + usage.get("cache_creation_input_tokens", 0)
-                    )
-                    samples.append((ts, total_tokens, message.get("model")))
+                samples.extend(_file_token_samples(path, cutoff, tail_bytes, max_tail_bytes))
             except OSError:
                 continue
     return samples
+
+
+def session_snapshots(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTES, max_tail_bytes=MAX_TAIL_BYTES):
+    """One entry per transcript file with token activity since cutoff - lets
+    the caller see which individual Claude Code session is driving usage,
+    not just the aggregate. dominant_model is whichever model produced the
+    most tokens in-window for that session (None if none were attributed)."""
+    snapshots = []
+    if not os.path.isdir(projects_dir):
+        return snapshots
+
+    for root, _dirs, files in os.walk(projects_dir):
+        for name in files:
+            if not name.endswith(".jsonl"):
+                continue
+            path = os.path.join(root, name)
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    continue
+                samples = _file_token_samples(path, cutoff, tail_bytes, max_tail_bytes)
+            except OSError:
+                continue
+            tokens = sum(t for _ts, t, _model in samples)
+            if tokens <= 0:
+                continue
+            model_totals = {}
+            for _ts, t, model in samples:
+                if model:
+                    model_totals[model] = model_totals.get(model, 0) + t
+            dominant_model = max(model_totals, key=model_totals.get) if model_totals else None
+            snapshots.append({
+                "session_id": name[:-len(".jsonl")],
+                "project": os.path.basename(root),
+                "tokens": tokens,
+                "dominant_model": dominant_model,
+            })
+    return snapshots
 
 
 def tokens_per_minute(window_seconds=300):

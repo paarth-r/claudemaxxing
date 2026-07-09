@@ -1,7 +1,7 @@
 import sys, os, json, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from stats import compute_tokens_per_minute, count_sessions_from_ps_lines, recent_token_samples
+from stats import compute_tokens_per_minute, count_sessions_from_ps_lines, recent_token_samples, session_snapshots
 
 def test_compute_tokens_per_minute_sums_within_window():
     now = 1000
@@ -84,3 +84,50 @@ def test_recent_token_samples_includes_model(tmp_path):
         _write_jsonl_line(f, now - 10, {"input_tokens": 2, "output_tokens": 3}, model="claude-fable-5")
     samples = recent_token_samples(cutoff=now - 300, projects_dir=str(tmp_path))
     assert samples == [(samples[0][0], 5, "claude-fable-5")]
+
+
+def _write_session(dir_path, project, session_id, lines):
+    """lines: list of (timestamp_epoch, usage, model)."""
+    project_dir = dir_path / project
+    project_dir.mkdir(parents=True, exist_ok=True)
+    path = project_dir / "{}.jsonl".format(session_id)
+    with open(path, "w") as f:
+        for ts, usage, model in lines:
+            _write_jsonl_line(f, ts, usage, model)
+    return path
+
+
+def test_session_snapshots_one_entry_per_active_session(tmp_path):
+    now = time.time()
+    _write_session(tmp_path, "hyperform", "sess-a", [
+        (now - 30, {"input_tokens": 100, "output_tokens": 50}, "claude-opus-4-8"),
+        (now - 10, {"input_tokens": 200, "output_tokens": 100}, "claude-opus-4-8"),
+    ])
+    _write_session(tmp_path, "storepose", "sess-b", [
+        (now - 20, {"input_tokens": 10, "output_tokens": 5}, "claude-haiku-4-5"),
+    ])
+    snapshots = session_snapshots(cutoff=now - 300, projects_dir=str(tmp_path))
+    by_session = {s["session_id"]: s for s in snapshots}
+    assert by_session["sess-a"]["project"] == "hyperform"
+    assert by_session["sess-a"]["tokens"] == 450
+    assert by_session["sess-a"]["dominant_model"] == "claude-opus-4-8"
+    assert by_session["sess-b"]["tokens"] == 15
+
+def test_session_snapshots_dominant_model_is_the_one_with_most_tokens(tmp_path):
+    now = time.time()
+    _write_session(tmp_path, "proj", "sess", [
+        (now - 20, {"input_tokens": 500, "output_tokens": 0}, "claude-opus-4-8"),
+        (now - 10, {"input_tokens": 10, "output_tokens": 0}, "claude-haiku-4-5"),
+    ])
+    snapshots = session_snapshots(cutoff=now - 300, projects_dir=str(tmp_path))
+    assert snapshots[0]["dominant_model"] == "claude-opus-4-8"
+
+def test_session_snapshots_excludes_sessions_with_no_tokens_in_window(tmp_path):
+    now = time.time()
+    _write_session(tmp_path, "proj", "sess", [
+        (now - 10000, {"input_tokens": 100, "output_tokens": 0}, "claude-opus-4-8"),
+    ])
+    assert session_snapshots(cutoff=now - 300, projects_dir=str(tmp_path)) == []
+
+def test_session_snapshots_empty_projects_dir(tmp_path):
+    assert session_snapshots(cutoff=time.time() - 300, projects_dir=str(tmp_path / "missing")) == []
