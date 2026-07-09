@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote
+from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, JOBS, pick_quote, format_attribution
 
 ALL_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
 
@@ -28,3 +28,14 @@ def test_pick_quote_returns_from_pool():
     for _ in range(20):
         result = pick_quote(AT_QUOTES)
         assert result in AT_QUOTES
+
+def test_every_philosopher_used_has_a_job():
+    philosophers = set(p for _, p in BELOW_QUOTES + AT_QUOTES + ABOVE_QUOTES)
+    missing = philosophers - set(JOBS)
+    assert not missing, "no job title for: {}".format(missing)
+
+def test_format_attribution_includes_job():
+    assert format_attribution("Sun Tzu") == "Sun Tzu, {}".format(JOBS["Sun Tzu"])
+
+def test_format_attribution_falls_back_gracefully_for_unknown_name():
+    assert format_attribution("Some New Guy") == "Some New Guy"

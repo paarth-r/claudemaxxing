@@ -104,5 +104,44 @@ ABOVE_QUOTES = [
 ]
 
 
+# Anachronistic LinkedIn-style titles - purely cosmetic flourish on the
+# attribution line, one fixed job per philosopher regardless of quote.
+JOBS = {
+    "Aristotle": "Head of Taxonomy @ Google",
+    "Buddha": "VP of Mindfulness @ Calm",
+    "Camus": "Staff Engineer, Chaos Team @ Meta",
+    "Confucius": "Head of People Ops @ ByteDance",
+    "Diogenes": "Homeless-but-Verified @ X",
+    "Epictetus": "Director of Resilience Engineering @ AWS",
+    "Epicurus": "Head of Developer Happiness @ Notion",
+    "Hegel": "Principal Architect, Dialectics @ Palantir",
+    "Heraclitus": "Head of Continuous Deployment @ Netflix",
+    "Hobbes": "Head of Trust & Safety @ Meta",
+    "Kafka": "Founding Engineer @ Apache Kafka",
+    "Kant": "Head of Multimodal Research @ Anthropic",
+    "Lao Tzu": "Head of Platform Simplicity @ Basecamp",
+    "Machiavelli": "VP of Growth @ a16z",
+    "Marcus Aurelius": "Head of Stoic Philosophy @ McKinsey",
+    "Nietzsche": "Chief Vision Officer @ OpenAI",
+    "Plato": "Philosopher-in-Residence @ Y Combinator",
+    "Rousseau": "Head of Community @ Discord",
+    "Sartre": "Head of Nothingness @ Meta Reality Labs",
+    "Schopenhauer": "Head of Risk @ Coinbase",
+    "Seneca": "Head of Executive Coaching @ LinkedIn",
+    "Socrates": "Head of Interview Engineering @ Google",
+    "Sophocles": "Head of Narrative Design @ Riot Games",
+    "Sun Tzu": "Head Architect @ Google",
+    "Wittgenstein": "Head of Developer Documentation @ Stripe",
+    "Zhuangzi": "Head of Developer Experience @ Vercel",
+}
+
+
 def pick_quote(pool):
     return random.choice(pool)
+
+
+def format_attribution(philosopher):
+    job = JOBS.get(philosopher)
+    if job is None:
+        return philosopher
+    return "{}, {}".format(philosopher, job)

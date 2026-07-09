@@ -15,7 +15,7 @@ from pace import (
     is_stale,
     format_duration,
 )
-from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote
+from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote, format_attribution
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
 
@@ -149,7 +149,10 @@ def render(state, history, last_quote, live_stats=None, window_history=None):
 
     if last_quote:
         quote_text, philosopher = last_quote
-        lines.append(Text("\n· \"{}\" —{} ·".format(quote_text, philosopher), style="dim italic"))
+        lines.append(Text(
+            "\n· \"{}\" —{} ·".format(quote_text, format_attribution(philosopher)),
+            style="dim italic",
+        ))
 
     return Panel(Group(*lines), title="claudemaxxing (5h window)", height=console.height)
 
