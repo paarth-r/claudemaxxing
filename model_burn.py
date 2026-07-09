@@ -110,3 +110,47 @@ def detect_current_model(token_samples, now, lookback_seconds=CURRENT_MODEL_LOOK
     if not by_model:
         return None
     return max(by_model, key=by_model.get)
+
+
+def _stay(current_model, eligible, ideal_rate):
+    if current_model:
+        return "stay on {}".format(current_model)
+    closest = min(eligible, key=lambda m: abs(eligible[m]["rate"] - ideal_rate))
+    return "stay on {}".format(closest)
+
+
+def suggest(pace, ideal_rate, current_rate, used_pct, remaining_minutes, current_model, averages):
+    """Turn per-model burn rates into an action. 'Heavier' means a higher
+    measured burn rate - that is what heaviness means for the limit, and it
+    needs no hardcoded ladder for unknown model ids."""
+    eligible = eligible_models(averages)
+    if not eligible:
+        return "collecting data"
+    by_rate_desc = sorted(eligible, key=lambda m: eligible[m]["rate"], reverse=True)
+
+    if pace == "BELOW":
+        surplus_pct = (100.0 - used_pct) - current_rate * remaining_minutes
+        for m in by_rate_desc:
+            if surplus_pct >= eligible[m]["rate"] * NOMINAL_SESSION_MINUTES:
+                return "one more {} session".format(m)
+        faster = [
+            m for m in by_rate_desc
+            if m != current_model
+            and eligible[m]["rate"] > current_rate
+            and abs(eligible[m]["rate"] - ideal_rate) < abs(current_rate - ideal_rate)
+        ]
+        if faster:
+            best = min(faster, key=lambda m: abs(eligible[m]["rate"] - ideal_rate))
+            return "switch to {}".format(best)
+        return _stay(current_model, eligible, ideal_rate)
+
+    if pace == "ABOVE":
+        fits = [m for m in by_rate_desc if eligible[m]["rate"] <= ideal_rate]
+        if fits:
+            if fits[0] == current_model:
+                return "stay on {}".format(current_model)
+            return "switch to {}".format(fits[0])
+        lightest = by_rate_desc[-1]
+        return "ease off - even {} overshoots".format(lightest)
+
+    return _stay(current_model, eligible, ideal_rate)

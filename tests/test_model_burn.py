@@ -107,3 +107,56 @@ def test_detect_current_model_picks_dominant_recent_model():
 
 def test_detect_current_model_none_when_quiet():
     assert detect_current_model([], now=1000) is None
+
+
+from model_burn import suggest
+
+AVGS = {
+    "fable":  {"rate": 0.9, "minutes": 60.0},
+    "opus":   {"rate": 0.5, "minutes": 60.0},
+    "sonnet": {"rate": 0.2, "minutes": 60.0},
+    "haiku":  {"rate": 0.05, "minutes": 60.0},
+}
+
+def test_suggest_collecting_data_when_nothing_eligible():
+    sparse = {"fable": {"rate": 0.9, "minutes": 2.0}}
+    assert suggest("BELOW", 0.5, 0.1, 20, 120, "fable", sparse) == "collecting data"
+    assert suggest("BELOW", 0.5, 0.1, 20, 120, None, {}) == "collecting data"
+
+def test_suggest_below_one_more_session_of_heaviest_that_fits():
+    # used 20%, rate 0.1%/min, 120m left -> surplus = 80 - 12 = 68%
+    # fable session costs 0.9*30 = 27% <= 68 -> fits, and it's the heaviest
+    assert suggest("BELOW", 0.5, 0.1, 20, 120, "sonnet", AVGS) == "one more fable session"
+
+def test_suggest_below_smaller_session_when_surplus_is_tight():
+    # used 88%, rate 0.05%/min, 60m left -> surplus = 12 - 3 = 9%
+    # fable 27% no, opus 15% no, sonnet 6% yes
+    assert suggest("BELOW", 0.2, 0.05, 88, 60, "haiku", AVGS) == "one more sonnet session"
+
+def test_suggest_below_switch_up_when_no_session_fits():
+    # used 99%, rate 0.0%/min, 10m left -> surplus = 1%. Cheapest session is
+    # haiku at 0.05*30 = 1.5% - nothing fits. Ideal is 0.1%/min; the only
+    # faster-than-current model closer to ideal than 0.0 is haiku (0.05).
+    assert suggest("BELOW", 0.1, 0.0, 99, 10, "sonnet", AVGS) == "switch to haiku"
+
+def test_suggest_below_stays_when_already_on_the_only_candidate():
+    # surplus = (100-99.5) - 0.04*10 = 0.1%; a haiku session costs 1.5% - no
+    # fit. haiku's rate would qualify for switch-up, but it IS the current
+    # model - "switching" to the model already in use must read as staying.
+    only = {"haiku": {"rate": 0.05, "minutes": 60.0}}
+    assert suggest("BELOW", 0.5, 0.04, 99.5, 10, "haiku", only) == "stay on haiku"
+
+def test_suggest_above_switches_to_heaviest_that_fits_ideal():
+    assert suggest("ABOVE", 0.3, 0.9, 50, 100, "fable", AVGS) == "switch to sonnet"
+
+def test_suggest_above_stay_when_current_already_fits():
+    assert suggest("ABOVE", 0.3, 0.9, 50, 100, "sonnet", AVGS) == "stay on sonnet"
+
+def test_suggest_above_ease_off_when_even_lightest_overshoots():
+    assert suggest("ABOVE", 0.01, 0.9, 50, 100, "fable", AVGS) == "ease off - even haiku overshoots"
+
+def test_suggest_at_stays_on_current():
+    assert suggest("AT", 0.5, 0.5, 50, 100, "opus", AVGS) == "stay on opus"
+
+def test_suggest_at_unknown_current_falls_back_to_closest_to_ideal():
+    assert suggest("AT", 0.5, 0.5, 50, 100, None, AVGS) == "stay on opus"
