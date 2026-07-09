@@ -8,7 +8,9 @@ from rich.text import Text
 
 from state_io import read_state, read_history, STATE_PATH, WINDOW_HISTORY_PATH
 from pace import compute_elapsed_percentage, compute_pace, is_stale, format_duration
-from quotes import FRUGAL_QUOTES, EXCESS_QUOTES, pick_quote
+from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote
+
+QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
 
@@ -140,8 +142,7 @@ def main():
                 elapsed_pct = compute_elapsed_percentage(state["resets_at"], now)
                 pace = compute_pace(state["used_percentage"], elapsed_pct)
                 if pace != last_pace:
-                    pool = EXCESS_QUOTES if pace == "ABOVE" else FRUGAL_QUOTES
-                    last_quote = pick_quote(pool)
+                    last_quote = pick_quote(QUOTE_POOLS[pace])
                     last_pace = pace
 
             live.update(render(state, history, last_quote, live_stats, window_history))

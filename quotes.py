@@ -1,6 +1,7 @@
 import random
 
-FRUGAL_QUOTES = [
+# Shown when pace is BELOW (underusing) - wisdom about restraint and patience.
+BELOW_QUOTES = [
     ("A wise man drives subagents; a fool develops inline.", "Plato"),
     ("He who compacts his context before it compacts him needs no reset.", "Sun Tzu"),
     ("The unexamined token is not worth spending.", "Socrates"),
@@ -31,11 +32,44 @@ FRUGAL_QUOTES = [
     ("The disciplined mind schedules its wakeups; the anxious mind polls forever.", "Epictetus"),
     ("A tool used once and put away outlives a tool left running unwatched.", "Diogenes"),
     ("The wise do not mistake motion for progress, nor tokens for thought.", "Lao Tzu"),
-    ("He who commits often fears no rebase.", "Sun Tzu"),
-    ("Restraint today buys context tomorrow.", "Marcus Aurelius"),
 ]
 
-EXCESS_QUOTES = [
+# Shown when pace is AT (matching elapsed time) - wisdom about balance and the middle way.
+AT_QUOTES = [
+    ("He who matches his pace to the reset walks neither hungry nor stuffed.", "Aristotle"),
+    ("The middle way spawns neither zero agents nor twenty; it spawns exactly as many as the task requires.", "Buddha"),
+    ("To flow like water is to use exactly the tokens the task demands, no more, no less.", "Lao Tzu"),
+    ("Virtue is a steady context window, neither starved nor bloated.", "Aristotle"),
+    ("He who paces himself to the five-hour window arrives at the reset neither breathless nor bored.", "Marcus Aurelius"),
+    ("The wise engineer commits neither too often nor too rarely, but exactly when the work is done.", "Confucius"),
+    ("Balance is choosing Sonnet when Sonnet suffices and Opus when it does not.", "Epictetus"),
+    ("He who neither hoards tokens nor squanders them has found the way.", "Lao Tzu"),
+    ("The river that matches its banks neither floods nor runs dry.", "Heraclitus"),
+    ("Equanimity is watching the pace bar and feeling nothing but mild satisfaction.", "Marcus Aurelius"),
+    ("The archer who draws exactly enough strikes the mark; more or less, he misses.", "Zhuangzi"),
+    ("He who reads one file before editing it, and no more, has mastered the mean.", "Confucius"),
+    ("Steady hands write steady commits.", "Seneca"),
+    ("The middle path forks one subagent for one hard problem, not one for every problem.", "Buddha"),
+    ("He who neither underthinks nor overthinks the reasoning effort has found the tao of tool use.", "Lao Tzu"),
+    ("Moderation is the rarest of the virtues, and the easiest to mistake for laziness.", "Aristotle"),
+    ("The wise man watches his usage bar rise with his elapsed time, in step, like dancers.", "Plato"),
+    ("To match effort to terrain is the general's whole art; to match tokens to task is the engineer's.", "Sun Tzu"),
+    ("He who neither rushes the plan nor stalls in it moves at the only speed that matters.", "Epictetus"),
+    ("The candle that burns steadily lights the whole night; the one that flares burns an hour.", "Seneca"),
+    ("Neither the ascetic who runs no agents nor the glutton who runs fifty finds the way; the middle way runs exactly enough.", "Buddha"),
+    ("He who checks his pace once an hour, not once a minute, has found peace.", "Epictetus"),
+    ("The sage's context window is neither empty from disuse nor bursting from neglect.", "Zhuangzi"),
+    ("Harmony is the sound of a five-hour window closing exactly as the work closes with it.", "Confucius"),
+    ("He who commits at the natural breakpoints of his work needs no rhythm imposed from without.", "Marcus Aurelius"),
+    ("The strategist who paces his reserves survives the whole campaign, not just the first battle.", "Sun Tzu"),
+    ("Balance is not caution; it is knowing precisely how much caution the moment requires.", "Aristotle"),
+    ("He who neither idles nor floods the terminal has made peace with the machine.", "Lao Tzu"),
+    ("The mean between the miser and the spendthrift is not half of both; it is knowing the task.", "Aristotle"),
+    ("To walk beside the clock, matching it step for step, is the quiet joy of the disciplined mind.", "Marcus Aurelius"),
+]
+
+# Shown when pace is ABOVE (overusing) - mockery of excess and wastefulness.
+ABOVE_QUOTES = [
     ("He who forks ten agents to write one commit message has not saved time, only borrowed shame from the future.", "Nietzsche"),
     ("Man's greatest hubris is not fire, but setting reasoning effort to max for a spelling fix.", "Nietzsche"),
     ("He who summons Opus to summarize a haiku has lost the plot entirely.", "Kafka"),
@@ -66,8 +100,6 @@ EXCESS_QUOTES = [
     ("Give a man a hammer and every problem becomes a twenty-agent orchestration.", "Nietzsche"),
     ("The examined life includes examining why you have six background tasks running at once.", "Socrates"),
     ("He who greedily hoards tokens for later finds later never comes, only the reset.", "Diogenes"),
-    ("Pride goeth before a five-hour lockout.", "Sophocles"),
-    ("The unexamined subagent spawns unexamined subagents, world without end.", "Kafka"),
 ]
 
 
