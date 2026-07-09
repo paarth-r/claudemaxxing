@@ -7,7 +7,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from state_io import read_state, read_history, STATE_PATH, WINDOW_HISTORY_PATH
-from pace import compute_elapsed_percentage, compute_pace, is_stale
+from pace import compute_elapsed_percentage, compute_pace, is_stale, format_duration
 from quotes import FRUGAL_QUOTES, EXCESS_QUOTES, pick_quote
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
@@ -86,6 +86,7 @@ def render(state, history, last_quote, live_stats=None, window_history=None):
     lines.append(elapsed_line)
 
     pace_line = Text("\nPace: {}".format(pace), style="bold {}".format(pace_color(pace)))
+    pace_line.append("   Resets in: {}".format(format_duration(resets_at - now)), style="dim")
     try:
         mtime = os.path.getmtime(STATE_PATH)
         if is_stale(mtime, now):

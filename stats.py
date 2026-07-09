@@ -6,6 +6,7 @@ from datetime import datetime
 
 PROJECTS_DIR = os.path.expanduser("~/.claude/projects")
 TAIL_BYTES = 131072
+MAX_TAIL_BYTES = 16 * 1024 * 1024
 
 
 def compute_tokens_per_minute(samples, now, window_seconds=300):
@@ -21,10 +22,50 @@ def _parse_iso_timestamp(ts_str):
         return None
 
 
-def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTES):
+def _read_tail_lines(path, cutoff, initial_bytes, max_bytes):
+    """Read lines from the tail of an append-only file, doubling the read
+    window until the earliest line in it predates cutoff (proving nothing
+    relevant was missed) or the whole file has been read. A fixed-size tail
+    read can silently undercount if a burst of large recent messages (e.g.
+    verbose tool output) pushes an older-but-still-in-window message beyond
+    it - this guarantees correctness instead of hoping the guess was big enough.
+    """
+    size = os.path.getsize(path)
+    read_size = min(initial_bytes, size)
+
+    while True:
+        with open(path, "rb") as f:
+            if read_size < size:
+                f.seek(size - read_size)
+                f.readline()  # discard the partial line at the seek point
+            lines = f.readlines()
+
+        if read_size >= size or read_size >= max_bytes:
+            return lines
+
+        earliest_ts = None
+        for raw_line in lines:
+            line = raw_line.decode("utf-8", errors="ignore").strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = _parse_iso_timestamp(obj.get("timestamp"))
+            if ts is not None:
+                earliest_ts = ts
+                break  # file is append-only/chronological - first parseable line is earliest
+
+        if earliest_ts is not None and earliest_ts < cutoff:
+            return lines
+
+        read_size = min(read_size * 4, size, max_bytes)
+
+
+def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTES, max_tail_bytes=MAX_TAIL_BYTES):
     """Scan recently-modified transcript files for (timestamp, token_count)
-    samples newer than cutoff. Only reads the tail of each file since
-    relevant entries are always near the end of an append-only log."""
+    samples newer than cutoff."""
     samples = []
     if not os.path.isdir(projects_dir):
         return samples
@@ -37,38 +78,33 @@ def recent_token_samples(cutoff, projects_dir=PROJECTS_DIR, tail_bytes=TAIL_BYTE
             try:
                 if os.path.getmtime(path) < cutoff:
                     continue
-                size = os.path.getsize(path)
-                with open(path, "rb") as f:
-                    if size > tail_bytes:
-                        f.seek(size - tail_bytes)
-                        f.readline()
-                    for raw_line in f:
-                        line = raw_line.decode("utf-8", errors="ignore").strip()
-                        if not line:
-                            continue
-                        try:
-                            obj = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        message = obj.get("message")
-                        if not isinstance(message, dict):
-                            continue
-                        usage = message.get("usage")
-                        if not isinstance(usage, dict):
-                            continue
-                        ts = _parse_iso_timestamp(obj.get("timestamp"))
-                        if ts is None or ts < cutoff:
-                            continue
-                        # Deliberately excludes cache_read_input_tokens: that
-                        # field re-bills the entire cached context on every
-                        # message and stays huge/roughly-constant for a long
-                        # conversation, drowning out the actual new-work signal.
-                        total_tokens = (
-                            usage.get("input_tokens", 0)
-                            + usage.get("output_tokens", 0)
-                            + usage.get("cache_creation_input_tokens", 0)
-                        )
-                        samples.append((ts, total_tokens))
+                for raw_line in _read_tail_lines(path, cutoff, tail_bytes, max_tail_bytes):
+                    line = raw_line.decode("utf-8", errors="ignore").strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    message = obj.get("message")
+                    if not isinstance(message, dict):
+                        continue
+                    usage = message.get("usage")
+                    if not isinstance(usage, dict):
+                        continue
+                    ts = _parse_iso_timestamp(obj.get("timestamp"))
+                    if ts is None or ts < cutoff:
+                        continue
+                    # Deliberately excludes cache_read_input_tokens: that
+                    # field re-bills the entire cached context on every
+                    # message and stays huge/roughly-constant for a long
+                    # conversation, drowning out the actual new-work signal.
+                    total_tokens = (
+                        usage.get("input_tokens", 0)
+                        + usage.get("output_tokens", 0)
+                        + usage.get("cache_creation_input_tokens", 0)
+                    )
+                    samples.append((ts, total_tokens))
             except OSError:
                 continue
     return samples

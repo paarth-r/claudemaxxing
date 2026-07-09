@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pace import compute_elapsed_percentage, compute_pace, is_stale
+from pace import compute_elapsed_percentage, compute_pace, is_stale, format_duration
 
 def test_elapsed_percentage_at_window_start():
     now = 1000
@@ -32,3 +32,16 @@ def test_is_stale():
     now = 10000
     assert is_stale(mtime=now - 601, now=now) is True
     assert is_stale(mtime=now - 599, now=now) is False
+
+def test_format_duration_hours_and_minutes():
+    assert format_duration(2 * 3600 + 43 * 60) == "2h 43m"
+
+def test_format_duration_minutes_only():
+    assert format_duration(9 * 60) == "9m"
+
+def test_format_duration_zero_or_negative_is_now():
+    assert format_duration(0) == "now"
+    assert format_duration(-30) == "now"
+
+def test_format_duration_rounds_down_seconds():
+    assert format_duration(125) == "2m"

@@ -33,8 +33,13 @@ def merge_snapshot(existing, incoming):
     if existing is None:
         return incoming
     if existing.get("resets_at") != incoming.get("resets_at"):
-        # A new 5h window started - the incoming reading is for that window.
-        return incoming
+        # Only a genuinely newer window (higher resets_at) may advance the
+        # shared state. A lagging session can report a reading for a window
+        # that already ended elsewhere - accepting that would regress the
+        # shared state backward and falsely archive the still-current window.
+        if incoming.get("resets_at", 0) > existing.get("resets_at", 0):
+            return incoming
+        return existing
     if incoming.get("used_percentage", 0) >= existing.get("used_percentage", 0):
         return incoming
     return existing

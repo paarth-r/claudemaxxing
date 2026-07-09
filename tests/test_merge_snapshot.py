@@ -27,6 +27,16 @@ def test_merge_prefers_incoming_when_window_has_reset():
     incoming = {"used_percentage": 2, "resets_at": 999}
     assert merge_snapshot(existing, incoming) == incoming
 
+def test_merge_rejects_incoming_for_an_older_window():
+    # A lagging session can report data for a window that has *already*
+    # ended, after another session already advanced the shared state to the
+    # next window. That stale reading must never regress the shared state
+    # backward (it would corrupt window-history archiving into thinking the
+    # current window "ended" prematurely).
+    existing = {"used_percentage": 5, "resets_at": 999}
+    incoming = {"used_percentage": 80, "resets_at": 100}  # older window, higher %
+    assert merge_snapshot(existing, incoming) == existing
+
 def test_build_window_archive_entry_none_when_no_existing():
     final_state = {"used_percentage": 10, "resets_at": 999}
     assert build_window_archive_entry(None, final_state, now=1000) is None

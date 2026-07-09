@@ -18,3 +18,13 @@ def compute_pace(used_pct, elapsed_pct, deadband=3.0):
 
 def is_stale(mtime, now, threshold_seconds=600):
     return (now - mtime) > threshold_seconds
+
+
+def format_duration(seconds):
+    if seconds <= 0:
+        return "now"
+    minutes = int(seconds // 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours > 0:
+        return "{}h {}m".format(hours, minutes)
+    return "{}m".format(minutes)

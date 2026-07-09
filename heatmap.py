@@ -28,10 +28,27 @@ def format_time_ago(seconds_ago):
     return "{}d".format(int(seconds_ago // 86400))
 
 
+def _dedupe_by_window_keeping_max(window_history):
+    """Multiple concurrent Claude Code sessions can each independently
+    archive the same completed window (with different, lagging peak values)
+    - collapse to one entry per resets_at, keeping the true (highest) peak."""
+    best_by_window = {}
+    for entry in window_history:
+        resets_at = entry["resets_at"]
+        pct = entry.get("peak_usage_percentage", 0)
+        if resets_at not in best_by_window or pct > best_by_window[resets_at]:
+            best_by_window[resets_at] = pct
+    return [
+        {"resets_at": resets_at, "peak_usage_percentage": pct}
+        for resets_at, pct in best_by_window.items()
+    ]
+
+
 def build_cube_row(window_history, current_peak_pct, current_window_end, now, max_cubes=20):
     """Chronological list of completed windows plus the in-progress current
     window as the last (rightmost) cube. Each entry: {"pct", "ago_seconds"}."""
-    entries = sorted(window_history, key=lambda e: e["resets_at"])
+    entries = _dedupe_by_window_keeping_max(window_history)
+    entries = sorted(entries, key=lambda e: e["resets_at"])
     entries = entries + [
         {"resets_at": current_window_end, "peak_usage_percentage": current_peak_pct}
     ]

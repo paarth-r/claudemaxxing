@@ -50,3 +50,18 @@ def test_build_cube_row_caps_to_max_cubes():
 def test_build_cube_row_no_usage_gives_zero_pct():
     cubes = build_cube_row([], current_peak_pct=0, current_window_end=100, now=50)
     assert cubes[0]["pct"] == 0
+
+def test_build_cube_row_deduplicates_same_window_keeping_max_peak():
+    # Multiple concurrent sessions can each independently archive the same
+    # completed window with different (lagging) peak values - display must
+    # collapse these into a single cube using the true max, not one cube per entry.
+    window_history = [
+        {"resets_at": 100, "peak_usage_percentage": 40},
+        {"resets_at": 100, "peak_usage_percentage": 62},
+        {"resets_at": 100, "peak_usage_percentage": 39},
+        {"resets_at": 200, "peak_usage_percentage": 30},
+    ]
+    cubes = build_cube_row(window_history, current_peak_pct=5, current_window_end=300, now=250)
+    assert len(cubes) == 3  # window 100, window 200, current - not 5
+    assert cubes[0]["pct"] == 62
+    assert cubes[1]["pct"] == 30
