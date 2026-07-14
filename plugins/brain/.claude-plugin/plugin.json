@@ -1,0 +1,8 @@
+{
+  "name": "brain",
+  "version": "0.1.0",
+  "description": "Per-project agent memory: rules the agent writes and hooks actually enforce.",
+  "author": {
+    "name": "paarth-r"
+  }
+}

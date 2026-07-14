@@ -1,0 +1,13 @@
+{
+  "name": "claudemaxxing",
+  "owner": {
+    "name": "paarth-r"
+  },
+  "plugins": [
+    {
+      "name": "brain",
+      "source": "./plugins/brain",
+      "description": "Per-project agent memory: rules the agent writes and hooks actually enforce."
+    }
+  ]
+}
