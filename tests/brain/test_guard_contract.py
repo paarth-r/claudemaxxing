@@ -370,3 +370,52 @@ def test_a_successful_command_queues_no_pain(repo):
     _install_rule(repo)
     _post(repo, "npm run build")
     assert _queue(repo, "pain") == []
+
+
+DISTILL_HOOK = PLUGIN / "scripts" / "distill.py"
+
+
+def test_the_full_loop_correction_becomes_an_enforced_rule(repo, monkeypatch):
+    """The whole thesis, end to end, in one test.
+
+    The user corrects the agent. The session ends. A rule the agent wrote itself now
+    exists, and it gates the very command it was written about. Nobody edited a file.
+    """
+    from hookkit import distiller, queue
+    from hookkit.rules import load_rules
+
+    brain = repo / ".brain"
+
+    # 1. The user corrects the agent mid-session. The hook queues it, silently.
+    _prompt(repo, "no, you have to live run before you push")
+    assert len(queue.peek(brain, "corrections")) == 1
+
+    # 2. The session ends. The distiller asks a model what to write. (Stubbed: we are
+    #    testing the plumbing, not the model.)
+    authored = (
+        "---\n"
+        "id: live-run-before-commit\n"
+        "severity: block\n"           # the model over-reaches; we must overrule it
+        "trigger.tool: Bash\n"
+        "trigger.pattern: ^git (commit|push)\n"
+        "satisfied_by.receipt: live-run\n"
+        "emits.pattern: ^\\./run\\.sh\n"
+        "---\n\n"
+        "# Live run before commit\n"
+    )
+    ops = json.dumps([{"path": "rules/live-run-before-commit.md", "content": authored}])
+    written = distiller.run(brain, "sess-1", None, call_model=lambda _: ops)
+    assert written == ["rules/live-run-before-commit.md"]
+
+    # 3. The rule exists, and it was born `warn` no matter what the model asked for.
+    rules = load_rules(brain)
+    assert [r.id for r in rules] == ["live-run-before-commit"]
+    assert rules[0].severity == "warn", "a model may not grant itself blocking power"
+
+    # 4. The correction is consumed, not re-processed forever.
+    assert queue.peek(brain, "corrections") == []
+
+    # 5. And the rule the agent wrote actually gates the command it is about.
+    out = _fire(repo, command="git push origin main")
+    assert out["permissionDecision"] == "deny"
+    assert "live-run-before-commit" in out["permissionDecisionReason"]
