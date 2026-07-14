@@ -49,6 +49,43 @@ window, and must not require the user to maintain it.
 - A retrieval/embedding system. A thin index plus on-demand reads is sufficient at
   this scale and has no moving parts.
 
+## Generality
+
+storePose is the **proving ground, not the target**. The system must work unchanged
+on Hyperform, AOS, the campus game, and repos that do not exist yet. Nothing in
+`hookkit` may know what `uv`, `pytest`, or Python is.
+
+The design generalizes because every project-specific thing is **data in a rule file**,
+never code:
+
+| Project-specific thing | Where it lives | Generic mechanism |
+|---|---|---|
+| "live run before commit" | a rule's `trigger` + `satisfied_by` | match a tool call; look for a receipt |
+| `./run.sh --source videos/test.mp4` | a rule's `remedy.command` | run an arbitrary shell command |
+| `src/**` | a rule's `fresher_than` glob | compare mtimes against a glob |
+| `live-run` | a rule's `receipt` kind | receipt kinds are arbitrary strings |
+
+So the same engine expresses "run the C++ sim before pushing to AOS", "rebuild
+`web/out` after touching `web/`", "never commit raw footage", or "run the stereo rig
+calibration check before changing camera code" — with no change to the code, only new
+rule files the agent writes.
+
+### Bootstrap: no repo starts empty
+
+`/brain init` seeds a repo by **ingesting what it already has**: `AGENTS.md`,
+`CLAUDE.md`, `README`, `CONTRIBUTING`, and CI config. A one-shot Sonnet pass turns
+imperative statements already written down ("always run X", "never use Y", "rebuild Z
+after touching W") into rules and gotchas.
+
+This is high-leverage precisely because those documents are where good rules go to be
+ignored. storePose's `AGENTS.md` alone yields the live-run rule, the `avc1`-not-`mp4v`
+rule, the stale-`web/out` rule, and the no-raw-footage privacy rule — all of which are
+already written, and none of which are currently enforced. Bootstrapping converts
+existing dead prose into live enforcement on day one, in any repo.
+
+Bootstrapped rules are born `severity: warn` like any other, so a bad read of a README
+decays on its own rather than wedging a new project.
+
 ## Core mechanism: receipts
 
 Compliance fails today because it is **unverifiable**. The agent can claim it live-ran.
@@ -365,14 +402,19 @@ not worth anything until M2 proves the core claim, so M2 is the real bar.
   proves the plugin loads, fires, and is a strict no-op in repos without `.brain/`.
   Verifiable: install it, see it do nothing, disable it, see it gone.
 - **M2 — The gate (the whole point).** Receipts, rule parsing, `PreToolUse`
-  auto-remedy, self-releasing override. Hand-write one rule file in storePose and
-  prove that `git commit` without a fresh live run is actually stopped, and that a
-  commit *with* one sails through untouched. **If this milestone does not visibly
-  change agent behavior in storePose, the design is wrong and the rest should not be
-  built.**
-- **M3 — Capture.** `UserPromptSubmit` correction queue, pain events, `SessionEnd`
-  distiller. Verifiable: correct the agent once, end the session, see a rule file the
-  agent wrote appear, then watch it fire in the next session.
+  auto-remedy, self-releasing override. Hand-write one rule file and prove that
+  `git commit` without a fresh live run is actually stopped, and that a commit *with*
+  one sails through untouched. storePose is the proving ground because its failure is
+  already documented and reproducible. **If this milestone does not visibly change
+  agent behavior there, the design is wrong and the rest should not be built.**
+  Generality is proved in the same milestone by expressing a second, structurally
+  different rule from another repo (e.g. rebuild `web/out` after touching `web/`) with
+  no code change — only a new rule file.
+- **M3 — Capture.** `/brain init` bootstrap from existing docs, `UserPromptSubmit`
+  correction queue, pain events, `SessionEnd` distiller. Verifiable two ways: run
+  `init` on a repo and see rules mined out of its existing `AGENTS.md`; and correct
+  the agent once, end the session, see a rule file the agent wrote appear, then watch
+  it fire in the next session.
 - **M4 — Retrieval.** Index generation + `SessionStart` injection. Verifiable: index
   is under ~250 tokens and the agent reads a note only when it needs one.
 - **M5 — Vault.** One-way mirror into `secondbrain/projects/`, wikilinked into the
