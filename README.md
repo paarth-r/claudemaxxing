@@ -44,6 +44,25 @@ Then send at least one message in any Claude Code session (so it has usage data 
 claudemaxxing
 ```
 
+## The suite
+
+`claudemaxxing` is also a Claude Code **plugin marketplace**. The dashboard above stays
+download-and-run; the plugins install separately, and each can be paused or removed on
+its own without touching anything else.
+
+```
+/plugin marketplace add paarth-r/claudemaxxing
+/plugin install brain@claudemaxxing
+```
+
+- **[brain](plugins/brain/)** — per-project agent memory. Agents forget project
+  conventions, and writing them down does not fix it: a rule in a markdown file is a
+  suggestion, and at tool-call 40 the agent commits anyway. `brain` moves rules out of
+  prose and into hooks, where a `git commit` that skipped the required run is actually
+  stopped rather than merely tut-tutted at. It proves compliance with **receipts** — a
+  run only counts if it happened *after* the code it is meant to validate. Rules cost
+  zero context tokens, cannot deadlock you, and fail open.
+
 ## How it works
 
 Anthropic doesn't expose a public "check my usage" API. Claude Code itself computes your 5-hour usage percentage internally and only surfaces it through its **statusLine** feature — a small script you register in `settings.json` that Claude Code invokes on every render with the current rate-limit data on stdin.
