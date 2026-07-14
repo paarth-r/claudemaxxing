@@ -63,13 +63,19 @@ def decide(
     was_denied_fn: Callable[[Rule], bool],
     auto_remedy: bool,
 ) -> Decision:
-    """What should happen to this tool call?"""
+    """What should happen to this tool call?
+
+    EVERY matching rule is checked, not just the first. Several rules commonly share
+    a trigger (`git commit` gates the live run AND the web rebuild AND the privacy
+    check), so a satisfied rule means "keep looking", never "we are done" - otherwise
+    one passing rule would mask every unsatisfied rule behind it.
+    """
     for rule in rules:
         if not matches(rule, tool_name, command):
             continue
 
         if is_fresh_fn(rule):
-            return Decision(action=ALLOW)
+            continue  # this one is satisfied; the next rule still gets its say
 
         # Self-releasing: never deny the same call twice. A wrong rule costs one
         # wasted turn, never a deadlock. This is what makes it safe to let rules be

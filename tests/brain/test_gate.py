@@ -116,3 +116,28 @@ def test_deny_reason_tells_the_agent_how_to_get_unstuck():
 def test_different_tool_is_not_gated():
     decision = decide([make_rule()], "Write", "git commit -m x", COMMIT, never, never, True)
     assert decision.action == "allow"
+
+
+def test_a_satisfied_rule_does_not_mask_an_unsatisfied_one():
+    """Several rules share the `git commit` trigger. A passing rule must not shadow
+    a failing one behind it, or most of your rules silently never fire."""
+    satisfied = make_rule(id="live-run", receipt="live-run")
+    unsatisfied = make_rule(id="web-build", receipt="web-build", remedy_command=None)
+
+    def fresh_only_live_run(rule):
+        return rule.receipt == "live-run"
+
+    decision = decide(
+        [satisfied, unsatisfied], "Bash", "git commit -m x", COMMIT,
+        fresh_only_live_run, never, True,
+    )
+    assert decision.action == "deny"
+    assert decision.rule.id == "web-build"
+
+
+def test_all_rules_satisfied_allows_silently():
+    a = make_rule(id="a", receipt="one")
+    b = make_rule(id="b", receipt="two")
+    decision = decide([a, b], "Bash", "git commit -m x", COMMIT, always, never, True)
+    assert decision.action == "allow"
+    assert decision.rule is None
