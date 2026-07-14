@@ -4,6 +4,7 @@ import time
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
 from state_io import read_state, read_history, STATE_PATH, WINDOW_HISTORY_PATH
@@ -14,11 +15,13 @@ from pace import (
     compute_pace,
     is_stale,
     format_duration,
+    project_landing,
+    format_clock,
 )
 from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote, format_attribution
 from stats import tokens_per_minute, count_active_claude_sessions
 from heatmap import build_cube_row, cubes_that_fit, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
-from model_burn import gather_model_stats, suggest, apply_estimates, heaviest_session, suggest_hot_session_action
+from model_burn import gather_model_stats, suggest, apply_estimates, burn_rows, heaviest_session, suggest_hot_session_action
 
 QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
 PACE_HINTS = {"ABOVE": "ease off", "AT": "right on pace", "BELOW": "use more"}
@@ -131,6 +134,12 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
         "Pace: {} ({})".format(pace, PACE_HINTS[pace]),
         style="bold {}".format(pace_color(pace)),
     )
+    landing = project_landing(used_pct, info["current_rate"], now, resets_at)
+    if landing["kind"] == "exhaust":
+        projection_text = "   finish by {}".format(format_clock(landing["at"]))
+    else:
+        projection_text = "   lands at {:.0f}%".format(landing["pct"])
+    pace_line.append(projection_text, style="bold {}".format(pace_color(pace)))
     pace_line.append("   Resets in: {}".format(format_duration(resets_at - now)), style="dim")
     try:
         mtime = os.path.getmtime(STATE_PATH)
@@ -159,36 +168,40 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
         )
         lines.append(Text(stats_text, style="bold"))
 
-    # Model burn/suggestion is only useful when there's a pace problem to
-    # act on - at AT pace there's nothing to suggest, so show nothing.
-    if model_stats is not None and pace != "AT":
+    # The burn table is reference data, useful at any pace - it renders
+    # whenever there are rates to show. The suggestions are only useful when
+    # there's a pace problem to act on, so they stay gated to non-AT pace.
+    if model_stats is not None:
         rates = apply_estimates(model_stats["averages"])
-        suggest_prefix = "\n"  # keep panel spacing when there is no burn line yet
-        if rates:
-            by_rate = sorted(rates.items(), key=lambda kv: kv[1]["rate"], reverse=True)
-            burn_text = "Model burn: " + "   ".join(
-                "{} {:.2f}%/min ({})".format(
-                    m, a["rate"], "est" if a["estimated"] else "{:.0f}m".format(a["minutes"])
-                )
-                for m, a in by_rate
-            )
-            lines.append(Text("\n" + burn_text, style="bold", no_wrap=True, overflow="ellipsis"))
-            suggest_prefix = ""
-        suggestion = suggest(
-            pace, info["ideal_rate"], info["current_rate"], used_pct,
-            (resets_at - now) / 60, model_stats["current_model"], rates,
-        )
-        if suggestion == "collecting data":
-            suggestion_style = "dim"
-        else:
-            suggestion_style = "bold {}".format(pace_color(pace))
-        lines.append(Text("{}SUGGEST: {}".format(suggest_prefix, suggestion),
-                          style=suggestion_style))
+        suggest_prefix = "\n"  # keep panel spacing when there is no table above
 
-        hot_suggestion = suggest_hot_session_action(pace, info["ideal_rate"], hot_session, rates)
-        if hot_suggestion:
-            lines.append(Text("SUGGEST: {}".format(hot_suggestion),
-                              style="bold {}".format(pace_color(pace))))
+        if rates:
+            lines.append(Text("\nModel burn:", style="bold"))
+            table = Table(show_header=True, header_style="dim", box=None, pad_edge=False)
+            table.add_column("MODEL")
+            table.add_column("RATE", justify="right")
+            table.add_column("MEASURED", justify="right")
+            for model, rate_str, measured_str in burn_rows(rates):
+                table.add_row(model, rate_str, measured_str)
+            lines.append(table)
+            suggest_prefix = ""
+
+        if pace != "AT":
+            suggestion = suggest(
+                pace, info["ideal_rate"], info["current_rate"], used_pct,
+                (resets_at - now) / 60, model_stats["current_model"], rates,
+            )
+            if suggestion == "collecting data":
+                suggestion_style = "dim"
+            else:
+                suggestion_style = "bold {}".format(pace_color(pace))
+            lines.append(Text("{}SUGGEST: {}".format(suggest_prefix, suggestion),
+                              style=suggestion_style))
+
+            hot_suggestion = suggest_hot_session_action(pace, info["ideal_rate"], hot_session, rates)
+            if hot_suggestion:
+                lines.append(Text("SUGGEST: {}".format(hot_suggestion),
+                                  style="bold {}".format(pace_color(pace))))
 
     if last_quote:
         quote_text, philosopher = last_quote

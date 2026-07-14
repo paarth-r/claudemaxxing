@@ -261,3 +261,16 @@ def gather_model_stats(history, now, burn_path=MODEL_BURN_PATH,
         "averages": compute_averages(stored),
         "current_model": detect_current_model(token_samples, now),
     }
+
+
+def burn_rows(rates):
+    """Turn apply_estimates() output into sorted (model, rate_str,
+    measured_str) rows ready to hand to a table renderer."""
+    rows = []
+    for model in sorted(rates, key=lambda m: rates[m]["rate"], reverse=True):
+        a = rates[model]
+        prefix = "~" if a["estimated"] else ""
+        rate_str = "{}{:.2f}%/min".format(prefix, a["rate"])
+        measured_str = "{:.0f}m".format(a["minutes"])
+        rows.append((model, rate_str, measured_str))
+    return rows

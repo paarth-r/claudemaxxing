@@ -297,3 +297,27 @@ def test_gather_model_stats_empty_history(tmp_path):
                                 cursor_path=str(tmp_path / "c.json"),
                                 token_samples_fn=lambda cutoff: [])
     assert result == {"averages": {}, "current_model": None}
+
+
+from model_burn import burn_rows
+
+def test_burn_rows_sorts_by_rate_descending_and_marks_estimates():
+    rates = {
+        "fable": {"rate": 1.4, "minutes": 0.0, "estimated": True},
+        "opus": {"rate": 0.7, "minutes": 84.0, "estimated": False},
+        "sonnet": {"rate": 0.42, "minutes": 31.0, "estimated": False},
+        "haiku": {"rate": 0.14, "minutes": 0.0, "estimated": True},
+    }
+    assert burn_rows(rates) == [
+        ("fable", "~1.40%/min", "0m"),
+        ("opus", "0.70%/min", "84m"),
+        ("sonnet", "0.42%/min", "31m"),
+        ("haiku", "~0.14%/min", "0m"),
+    ]
+
+def test_burn_rows_measured_is_numeric_even_when_zero():
+    rates = {"opus": {"rate": 0.7, "minutes": 0.0, "estimated": False}}
+    assert burn_rows(rates) == [("opus", "0.70%/min", "0m")]
+
+def test_burn_rows_empty_input_returns_empty_list():
+    assert burn_rows({}) == []

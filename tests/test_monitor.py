@@ -1,5 +1,7 @@
-import sys, os, time
+import sys, os, time, io
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from rich.console import Console as _CaptureConsole
 
 from monitor import sparkline, render, render_heatmap, SPARK_CHARS
 
@@ -22,8 +24,9 @@ def test_sparkline_max_width_larger_than_data_is_a_no_op():
 
 
 def _panel_text(panel):
-    group = panel.renderable
-    return "\n".join(getattr(r, "plain", "") for r in group.renderables)
+    console = _CaptureConsole(file=io.StringIO(), width=100, color_system=None)
+    console.print(panel)
+    return console.file.getvalue()
 
 def _model_stats():
     return {"averages": {"opus": {"rate": 0.5, "minutes": 60.0}}, "current_model": "opus"}
@@ -38,7 +41,8 @@ def test_render_shows_nothing_from_model_burn_at_at_pace():
     text = _panel_text(panel)
     assert "Pace: AT" in text
     assert "SUGGEST" not in text
-    assert "Model burn" not in text
+    assert "Model burn" in text
+    assert "opus" in text
 
 def test_render_shows_suggestion_at_above_pace():
     now = time.time()
@@ -66,3 +70,39 @@ def test_render_heatmap_defaults_to_module_console_width():
     now = 100000
     result = render_heatmap([], 10, now + 18000, now)
     assert result is not None
+
+
+def test_render_pace_line_shows_finish_by_when_projection_exhausts():
+    now = time.time()
+    # used 50%, rate ramps 40->50 over 10 min = 1.0%/min, ideal = 50/100 = 0.5%/min
+    # -> ABOVE pace, and exhausts before the 100-minute reset
+    state = {"used_percentage": 50, "resets_at": now + 6000}
+    history = [{"timestamp": now - 600, "used_percentage": 40, "resets_at": now + 6000}]
+    panel = render(state, history, None, None, [], None, None)
+    text = _panel_text(panel)
+    assert "Pace: ABOVE" in text
+    assert "finish by " in text
+
+def test_render_pace_line_shows_lands_at_when_projection_undershoots():
+    now = time.time()
+    # used 10%, rate ramps 5->10 over 10 min = 0.5%/min, ideal = 90/100 = 0.9%/min
+    # -> BELOW pace, and never reaches 100% before the 100-minute reset
+    state = {"used_percentage": 10, "resets_at": now + 6000}
+    history = [{"timestamp": now - 600, "used_percentage": 5, "resets_at": now + 6000}]
+    panel = render(state, history, None, None, [], None, None)
+    text = _panel_text(panel)
+    assert "Pace: BELOW" in text
+    assert "lands at " in text
+
+
+def test_render_burn_table_has_columns_and_marks_estimates():
+    now = time.time()
+    state = {"used_percentage": 50, "resets_at": now + 6000}
+    history = [{"timestamp": now - 600, "used_percentage": 45, "resets_at": now + 6000}]
+    panel = render(state, history, None, None, [], _model_stats(), None)
+    text = _panel_text(panel)
+    assert "MODEL" in text
+    assert "RATE" in text
+    assert "MEASURED" in text
+    assert "opus" in text and "0.50%/min" in text and "60m" in text
+    assert "~" in text  # sonnet/haiku/fable are estimated from the opus anchor
