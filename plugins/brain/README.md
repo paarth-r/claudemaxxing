@@ -177,6 +177,21 @@ repo that later gets deleted leaves dead links behind.
 
 ## Commands
 
+In Claude Code, type `/brain` and the commands autocomplete:
+
+```
+/brain:status     what it knows, and whether its rules earn their keep
+/brain:dash       graph view — which rules are working, which are dying
+/brain:check      would this command be blocked?
+/brain:why        where a rule came from, and its track record
+/brain:doctor     what is installed, paused, or failing
+/brain:remember   write a convention down so it stops needing repeating
+/brain:init       give this repo a brain
+/brain:pause      stop enforcing
+```
+
+The same thing from a terminal:
+
 ```
 brain init        create a brain, mine rules from the repo's own docs
 brain status      what it knows, and whether its rules earn their keep
@@ -225,6 +240,31 @@ Worth knowing before you rely on it:
   what keeps a work rule out of an unrelated repo.
 - **Receipts are per-session.** A live run in yesterday's session does not satisfy today's
   commit. This is intentional and occasionally annoying.
+
+## Developing this plugin
+
+**A marketplace-installed plugin is a COPY.** Claude Code snapshots it into
+`~/.claude/plugins/cache/` at install time; it does not run from your working tree.
+Editing the source changes nothing — the hooks keep running the version you installed.
+
+This is easy to miss, because everything *looks* like it is working. It bit the author:
+a bug was fixed in the source, the tests passed, and the hooks kept happily running the
+old code with the bug still in it.
+
+After changing anything under `plugins/brain/`:
+
+```
+1. bump "version" in plugins/brain/.claude-plugin/plugin.json
+2. claude plugin marketplace update claudemaxxing
+3. claude plugin install brain@claudemaxxing
+4. /reload-plugins   (or restart)
+```
+
+Check what is actually running, not what you think is:
+
+```
+brain doctor
+```
 
 ## Requirements
 
