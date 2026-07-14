@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from heatmap import color_for_pct, format_time_ago, build_cube_row
+from heatmap import color_for_pct, format_time_ago, build_cube_row, cubes_that_fit
 
 def test_color_for_pct_zero_is_pure_grey():
     assert color_for_pct(0) == "#{:02x}{:02x}{:02x}".format(*color_for_pct.GREY)
@@ -65,3 +65,18 @@ def test_build_cube_row_deduplicates_same_window_keeping_max_peak():
     assert len(cubes) == 3  # window 100, window 200, current - not 5
     assert cubes[0]["pct"] == 62
     assert cubes[1]["pct"] == 30
+
+def test_cubes_that_fit_typical_width():
+    # 76 chars (an 80-col terminal minus 4 chars of Panel border+padding)
+    # -> (76+1)//5 = 15 cubes
+    assert cubes_that_fit(76) == 15
+
+def test_cubes_that_fit_exact_boundary():
+    # 10 cubes at CUBE_WIDTH=4, GAP_WIDTH=1 occupy exactly 10*4 + 9*1 = 49
+    assert cubes_that_fit(49) == 10
+    # one char narrower no longer fits a 10th cube
+    assert cubes_that_fit(48) == 9
+
+def test_cubes_that_fit_floors_to_one_on_narrow_width():
+    assert cubes_that_fit(0) == 1
+    assert cubes_that_fit(-10) == 1

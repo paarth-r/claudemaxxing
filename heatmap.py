@@ -61,3 +61,10 @@ def build_cube_row(window_history, current_peak_pct, current_window_end, now, ma
         }
         for e in entries
     ]
+
+
+def cubes_that_fit(available_width, cube_width=CUBE_WIDTH, gap_width=GAP_WIDTH):
+    """How many cubes (with gaps between them) fit in available_width,
+    minimum 1 - the in-progress window's cube must always show even on a
+    pathologically narrow terminal."""
+    return max(1, (available_width + gap_width) // (cube_width + gap_width))
