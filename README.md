@@ -31,12 +31,10 @@ A terminal dashboard that watches Claude Code's rolling 5-hour usage limit and t
 ```
 git clone https://github.com/paarth-r/claudemaxxing.git
 cd claudemaxxing
-./install.sh
+./setup.sh
 ```
 
-`install.sh` installs the one Python dependency (`rich`), symlinks the `claudemaxxing` command onto your `PATH` (`~/.local/bin`), and wires a small hook into `~/.claude/settings.json` — it only adds a `statusLine` key and leaves the rest of your settings untouched.
-
-If you've somehow managed to install and use Claude code to a point where you need this tool without using `git`, you can use GitHub's **Code → Download ZIP** button above, unzip, and run `./install.sh` from inside the folder.
+`setup.sh` asks which parts you want (see [the suite](#the-suite) below), installs them, and prints exactly how to undo it. Re-running it is safe — it detects what's already installed and changes nothing. `./setup.sh --uninstall` removes what it added.
 
 Then send at least one message in any Claude Code session (so it has usage data to report), and run:
 
@@ -44,33 +42,22 @@ Then send at least one message in any Claude Code session (so it has usage data 
 claudemaxxing
 ```
 
+Want only the dashboard, the way it has always worked? `./install.sh` still does exactly that: installs the one Python dependency (`rich`), symlinks the `claudemaxxing` command onto your `PATH` (`~/.local/bin`), and adds a `statusLine` key to `~/.claude/settings.json`, leaving the rest of your settings untouched. No `git`? Use GitHub's **Code → Download ZIP** button above, unzip, and run it from inside the folder.
+
 ## The suite
 
-`claudemaxxing` is also a Claude Code **plugin marketplace**. The dashboard above stays
-download-and-run; the plugins install separately, and each can be paused or removed on
-its own without touching anything else.
+`claudemaxxing` is also a Claude Code **plugin marketplace**. The dashboard stays download-and-run; the plugins install separately, and each can be paused or removed on its own without touching anything else.
 
-```
-git clone https://github.com/paarth-r/claudemaxxing.git
-cd claudemaxxing
-./setup.sh
-```
+- **[brain](plugins/brain/)** — per-project agent memory. Agents forget project conventions, and writing them down does not fix it: a rule in a markdown file is a suggestion, and at tool-call 40 the agent commits anyway. `brain` moves rules out of prose and into hooks, where a `git commit` that skipped the required run is actually **stopped** rather than merely tut-tutted at.
 
-`setup.sh` asks which parts you want, installs them, and tells you how to undo it
-(`./setup.sh --uninstall`). Or install the plugin by hand:
+  It proves compliance with **receipts**: a run only counts if it happened *after* the code it is meant to validate, so you cannot satisfy a rule with a test run from an hour ago. Rules are **written by the agent**, not by you — mined from the `AGENTS.md` and `README` you already have, and from the corrections you find yourself repeating. They are born on probation, earn the right to block by being right, and **archive themselves** when they keep being wrong.
 
-```
-/plugin marketplace add paarth-r/claudemaxxing
-/plugin install brain@claudemaxxing
-```
+  Rules cost **zero context tokens** (they live in hooks, not in your prompt), the gate cannot deadlock you, and every hook fails open: a broken brain means no brain, never a blocked commit.
 
-- **[brain](plugins/brain/)** — per-project agent memory. Agents forget project
-  conventions, and writing them down does not fix it: a rule in a markdown file is a
-  suggestion, and at tool-call 40 the agent commits anyway. `brain` moves rules out of
-  prose and into hooks, where a `git commit` that skipped the required run is actually
-  stopped rather than merely tut-tutted at. It proves compliance with **receipts** — a
-  run only counts if it happened *after* the code it is meant to validate. Rules cost
-  zero context tokens, cannot deadlock you, and fail open.
+  ```
+  /plugin marketplace add paarth-r/claudemaxxing
+  /plugin install brain@claudemaxxing
+  ```
 
 ## How it works
 
@@ -91,7 +78,7 @@ Four things worth knowing:
 - [Claude Code](https://claude.ai/code)
 - `rich` (installed automatically by `install.sh`)
 
-121 tests covering the pace math, multi-session merge logic, per-model burn attribution, hot-session detection, and file I/O — `pytest` (dev only, not needed to run the tool).
+389 tests — the pace math, multi-session merge logic, per-model burn attribution, hot-session detection, and file I/O for the dashboard; the rule engine, receipt freshness, gate decisions, and hook contracts for `brain`. Run with `pytest` (dev only, not needed to run either tool).
 
 ## License
 
