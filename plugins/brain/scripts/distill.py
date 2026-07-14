@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hookkit import distiller  # noqa: E402
+from hookkit import distiller, index  # noqa: E402
 from hookkit.discovery import find_brain  # noqa: E402
 from hookkit.failopen import run_hook  # noqa: E402
 from hookkit.killswitch import is_disabled  # noqa: E402
@@ -71,6 +71,11 @@ def main(payload: dict) -> None:
         return
 
     written = distiller.run(brain, session, transcript)
+
+    # Always regenerate: rules may have been archived by the lifecycle even if the
+    # distiller wrote nothing, and a stale index is misinformation.
+    index.generate(brain)
+
     _log(brain, "wrote %d file(s): %s" % (len(written), ", ".join(written) or "-"))
     # Deliberately no output.
 
