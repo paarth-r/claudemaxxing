@@ -14,6 +14,8 @@ from pace import (
     compute_pace,
     is_stale,
     format_duration,
+    project_landing,
+    format_clock,
 )
 from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote, format_attribution
 from stats import tokens_per_minute, count_active_claude_sessions
@@ -127,6 +129,12 @@ def render(state, history, last_quote, live_stats=None, window_history=None, mod
         "Pace: {} ({})".format(pace, PACE_HINTS[pace]),
         style="bold {}".format(pace_color(pace)),
     )
+    landing = project_landing(used_pct, info["current_rate"], now, resets_at)
+    if landing["kind"] == "exhaust":
+        projection_text = "   finish by {}".format(format_clock(landing["at"]))
+    else:
+        projection_text = "   lands at {:.0f}%".format(landing["pct"])
+    pace_line.append(projection_text, style="bold {}".format(pace_color(pace)))
     pace_line.append("   Resets in: {}".format(format_duration(resets_at - now)), style="dim")
     try:
         mtime = os.path.getmtime(STATE_PATH)

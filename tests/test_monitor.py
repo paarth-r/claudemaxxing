@@ -48,3 +48,26 @@ def test_render_shows_suggestion_at_above_pace():
     text = _panel_text(panel)
     assert "Pace: ABOVE" in text
     assert "SUGGEST" in text
+
+
+def test_render_pace_line_shows_finish_by_when_projection_exhausts():
+    now = time.time()
+    # used 50%, rate ramps 40->50 over 10 min = 1.0%/min, ideal = 50/100 = 0.5%/min
+    # -> ABOVE pace, and exhausts before the 100-minute reset
+    state = {"used_percentage": 50, "resets_at": now + 6000}
+    history = [{"timestamp": now - 600, "used_percentage": 40, "resets_at": now + 6000}]
+    panel = render(state, history, None, None, [], None, None)
+    text = _panel_text(panel)
+    assert "Pace: ABOVE" in text
+    assert "finish by " in text
+
+def test_render_pace_line_shows_lands_at_when_projection_undershoots():
+    now = time.time()
+    # used 10%, rate ramps 5->10 over 10 min = 0.5%/min, ideal = 90/100 = 0.9%/min
+    # -> BELOW pace, and never reaches 100% before the 100-minute reset
+    state = {"used_percentage": 10, "resets_at": now + 6000}
+    history = [{"timestamp": now - 600, "used_percentage": 5, "resets_at": now + 6000}]
+    panel = render(state, history, None, None, [], None, None)
+    text = _panel_text(panel)
+    assert "Pace: BELOW" in text
+    assert "lands at " in text
