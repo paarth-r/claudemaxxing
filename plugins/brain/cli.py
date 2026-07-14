@@ -323,6 +323,32 @@ def cmd_mirror(args) -> int:
     return 0
 
 
+def cmd_dash(args) -> int:
+    from hookkit import dash
+
+    brain = _brain_or_die()
+    name = repo_root(brain).name
+    server, url, _ = dash.serve(brain, name, port=args.port, open_browser=not args.no_open)
+
+    rules = load_rules(brain)
+    dying = [r.id for r in rules if r.overridden >= 2]
+
+    print("brain dash for %s" % name)
+    print("  %s" % url)
+    print("  %d rules, %d in trouble%s" % (
+        len(rules), len(dying), (": " + ", ".join(dying)) if dying else ""
+    ))
+    print("\nCtrl-C to stop.")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopped.")
+    finally:
+        server.server_close()
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="brain", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -357,6 +383,11 @@ def build_parser():
     remember.set_defaults(func=cmd_remember)
 
     sub.add_parser("mirror", help="export to the configured vault now").set_defaults(func=cmd_mirror)
+
+    dash = sub.add_parser("dash", help="open a graph view of this repo's brain")
+    dash.add_argument("--port", type=int, default=7373)
+    dash.add_argument("--no-open", action="store_true", help="print the URL, do not open a browser")
+    dash.set_defaults(func=cmd_dash)
 
     return parser
 

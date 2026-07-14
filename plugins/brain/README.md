@@ -157,6 +157,15 @@ mirror: ~/path/to/your/obsidian/vault
 single byte outside your repo. Set `mirror` once at the machine level and every repo
 exports there automatically.
 
+## Seeing it
+
+`brain dash` serves a graph of this repo's brain at `http://127.0.0.1:7373`. It shows the
+one thing Obsidian's graph cannot: each rule's **track record**. A rule that keeps being
+overridden is drawn dying and drifts to the edge of the graph; one that earned the right
+to block sits solid at the centre. Rules are ordered by who is in trouble.
+
+One HTML file, no CDN, no dependencies, no network. Works offline.
+
 ## Obsidian
 
 Every brain is openable as an Obsidian vault — both the repo's own `.brain/` and any
@@ -177,6 +186,7 @@ brain doctor      what is installed, what is paused, what is failing
 brain pause       stop enforcing (--global for everywhere)
 brain remember    write something down
 brain mirror      export to the configured vault now
+brain dash        graph view of this brain, on localhost
 ```
 
 Everything works with the plugin disabled — it is plain Python over the same library the

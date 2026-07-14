@@ -23,6 +23,17 @@ repo. Report what it prints; do not paraphrase a blocked-commit reason away.
 | "turn it back on" | `resume` |
 | "remember that <X>" | `remember "<X>"` |
 | "sync it to my vault" | `mirror` |
+| "/brain dash", "show me the graph", "open the brain" | `dash` |
+
+## dash
+
+`dash` serves a graph view of this repo's brain on localhost and opens it. Report the
+URL it prints. It is a long-running server: run it in the background so it does not
+block, and tell the user to Ctrl-C when done.
+
+The graph shows what Obsidian cannot: each rule's track record. A rule that keeps being
+overridden is drawn dying and drifts to the edge; one that earned the right to block sits
+solid at the centre. If the user asks which rules are working, this answers it.
 
 ## init
 
