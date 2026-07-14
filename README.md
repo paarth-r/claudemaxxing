@@ -51,6 +51,15 @@ download-and-run; the plugins install separately, and each can be paused or remo
 its own without touching anything else.
 
 ```
+git clone https://github.com/paarth-r/claudemaxxing.git
+cd claudemaxxing
+./setup.sh
+```
+
+`setup.sh` asks which parts you want, installs them, and tells you how to undo it
+(`./setup.sh --uninstall`). Or install the plugin by hand:
+
+```
 /plugin marketplace add paarth-r/claudemaxxing
 /plugin install brain@claudemaxxing
 ```
