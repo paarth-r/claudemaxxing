@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""PostToolUse: turn commands the agent actually ran into receipts.
+"""PostToolUse and PostToolUseFailure: turn commands the agent ran into receipts.
 
 A rule's `emits.pattern` names the commands that count as producing its receipt. If
 the agent does the live run itself - the normal case - that must satisfy the gate
 exactly as if the gate had run the remedy on its behalf.
 
-Success is judged by hookkit.outcome.passed, which only ever confirms a pass and
-never guesses one.
+This script is registered on BOTH events on purpose. Bash's tool_response has no
+exit code; success is signalled by which event fired (see hookkit/outcome.py). Wire
+up only PostToolUse and failed runs are never recorded as failures; wire up only the
+success event and a broken pipeline still earns a passing receipt.
 """
 
 from __future__ import annotations

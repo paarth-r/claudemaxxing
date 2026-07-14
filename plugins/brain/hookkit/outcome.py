@@ -1,24 +1,33 @@
 """Did a tool call actually succeed?
 
-This is the most safety-critical judgement in the codebase, and it is deliberately
-paranoid.
+This is the most safety-critical judgement in the codebase, and the answer is not
+where you would expect it to be.
 
-The two possible mistakes are wildly asymmetric:
+Bash's `tool_response` contains `stdout`, `stderr`, `interrupted`, and `isImage`.
+It does NOT contain an exit code, and it does NOT contain an error flag. Success is
+signalled by WHICH EVENT FIRED:
 
-  Reading a FAILURE as a pass   -> we write a passing receipt for a run that broke.
-                                   The gate then lets the commit through. The whole
-                                   system silently becomes theatre. Catastrophic.
+    PostToolUse         -> the tool call succeeded
+    PostToolUseFailure  -> the tool call failed (carries `error`, a string)
 
-  Reading a PASS as a failure   -> the gate re-runs the remedy to check. Costs a few
-                                   seconds. Harmless.
+So both events must be registered, and the event name is the signal. Guessing at a
+`tool_response.exit_code` here silently marks every command a failure - the receipt
+is never earned, and the gate denies forever.
 
-So: only a positively confirmed success counts. Every ambiguous, unrecognised, or
-malformed payload is treated as a failure. This also means the emitter stays correct
-if Claude Code changes the tool_response schema underneath us - it degrades to
-"verify again", never to "assume it's fine".
+Everything unrecognised is treated as a failure, because the two mistakes are wildly
+asymmetric:
+
+  Reading a FAILURE as a pass  -> a passing receipt for a run that broke. The gate
+                                  lets the commit through and the whole system
+                                  becomes theatre. Catastrophic and silent.
+
+  Reading a PASS as a failure  -> the gate asks for the run again. Harmless.
 """
 
 from __future__ import annotations
+
+SUCCESS_EVENT = "PostToolUse"
+FAILURE_EVENT = "PostToolUseFailure"
 
 
 def passed(payload) -> bool:
@@ -27,25 +36,29 @@ def passed(payload) -> bool:
         return False
 
     response = payload.get("tool_response")
-    if not isinstance(response, dict):
-        return False
 
     # An interrupted command never counts, whatever else it claims.
-    if response.get("interrupted") is True:
+    if isinstance(response, dict) and response.get("interrupted") is True:
+        return False
+    if payload.get("is_interrupt") is True:
         return False
 
-    if payload.get("is_error") is True:
+    # If a real numeric exit code ever appears in the payload, it is authoritative.
+    # Not documented for Bash today; honoured defensively if the schema grows one.
+    if isinstance(response, dict):
+        code = response.get("exit_code")
+        if isinstance(code, int) and not isinstance(code, bool):
+            return code == 0
+
+    event = payload.get("hook_event_name")
+    if event == FAILURE_EVENT:
         return False
 
-    # Most specific signal first: a real exit code settles it either way.
-    exit_code = response.get("exit_code")
-    if isinstance(exit_code, int) and not isinstance(exit_code, bool):
-        return exit_code == 0
+    # A genuine success payload always carries a tool_response object. Requiring one
+    # keeps a malformed payload from being read as a pass just because the event name
+    # looked right.
+    if event == SUCCESS_EVENT and isinstance(response, dict):
+        return True
 
-    # Next: an explicit error flag.
-    is_error = response.get("is_error")
-    if isinstance(is_error, bool):
-        return not is_error
-
-    # Unrecognised shape. Refuse to guess: not a pass.
+    # Unrecognised event or malformed payload. Refuse to guess: not a pass.
     return False

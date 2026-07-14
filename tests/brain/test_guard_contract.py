@@ -176,15 +176,24 @@ def test_a_stale_receipt_does_not_satisfy_the_gate(repo):
 
 RECEIPT_HOOK = PLUGIN / "scripts" / "receipt.py"
 
+# The REAL Bash tool_response shape. No exit_code, no is_error - success is carried
+# by which event fired. Getting this wrong marks every command a failure.
+BASH_OK = {"stdout": "847 frames", "stderr": "", "interrupted": False, "isImage": False}
 
-def _post(repo, command, response=None, session="sess-1"):
+
+def _post(repo, command, event="PostToolUse", response=None, session="sess-1"):
     payload = {
         "session_id": session,
         "cwd": str(repo),
+        "hook_event_name": event,
         "tool_name": "Bash",
         "tool_input": {"command": command},
-        "tool_response": {"exit_code": 0} if response is None else response,
     }
+    if event == "PostToolUseFailure":
+        payload["error"] = "Command exited with non-zero status code 1"
+        payload["is_interrupt"] = False
+    else:
+        payload["tool_response"] = BASH_OK if response is None else response
     env = dict(os.environ)
     env["HOME"] = str(repo / "fakehome")
     result = subprocess.run(
@@ -205,23 +214,24 @@ def _receipt_lines(repo, session="sess-1"):
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-def test_agent_run_command_earns_a_receipt(repo):
+def test_agent_run_command_earns_a_passing_receipt(repo):
+    """With the REAL payload shape, which carries no exit code at all."""
     _install_rule(repo)
     _post(repo, "echo doing the live run")
-    kinds = [r["kind"] for r in _receipt_lines(repo)]
-    assert "live-run" in kinds
+    entries = _receipt_lines(repo)
+    assert [e["kind"] for e in entries] == ["live-run"]
+    assert entries[0]["exit"] == 0, "PostToolUse firing IS the success signal"
 
 
 def test_failed_agent_run_earns_a_failing_receipt(repo):
     _install_rule(repo)
-    _post(repo, "echo doing the live run", response={"exit_code": 1})
+    _post(repo, "echo doing the live run", event="PostToolUseFailure")
     assert _receipt_lines(repo)[0]["exit"] == 1
 
 
-def test_unknown_response_shape_is_not_recorded_as_a_pass(repo):
-    """Safety: an unrecognised payload must never mint a passing receipt."""
+def test_interrupted_run_is_not_a_pass(repo):
     _install_rule(repo)
-    _post(repo, "echo doing the live run", response={"mystery": "future schema"})
+    _post(repo, "echo doing the live run", response={"stdout": "", "interrupted": True})
     assert _receipt_lines(repo)[0]["exit"] == 1
 
 
@@ -244,7 +254,7 @@ def test_failed_agent_run_does_not_let_the_commit_through(repo):
     _install_rule(repo, remedy="exit 1")
     old = time.time() - 100
     os.utime(repo / "src" / "main.py", (old, old))
-    _post(repo, "echo live run", response={"exit_code": 1})
+    _post(repo, "echo live run", event="PostToolUseFailure")
     out = _fire(repo)
     assert out["permissionDecision"] == "deny", "a FAILED run must not satisfy the rule"
 
@@ -253,9 +263,10 @@ def test_no_brain_receipt_hook_is_a_no_op(bare_repo):
     payload = {
         "session_id": "s",
         "cwd": str(bare_repo),
+        "hook_event_name": "PostToolUse",
         "tool_name": "Bash",
         "tool_input": {"command": "echo hi"},
-        "tool_response": {"exit_code": 0},
+        "tool_response": BASH_OK,
     }
     result = subprocess.run(
         [sys.executable, str(RECEIPT_HOOK)],
