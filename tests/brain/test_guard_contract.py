@@ -300,3 +300,73 @@ def test_a_persistently_wrong_rule_archives_itself(repo):
 
     # And it must genuinely stop enforcing.
     assert _fire(repo, command="git commit -m after") == {}, "an archived rule cannot gate"
+
+
+CAPTURE_HOOK = PLUGIN / "scripts" / "capture.py"
+
+
+def _prompt(repo, text, session="sess-1"):
+    payload = {"session_id": session, "cwd": str(repo), "prompt": text}
+    env = dict(os.environ)
+    env["HOME"] = str(repo / "fakehome")
+    result = subprocess.run(
+        [sys.executable, str(CAPTURE_HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0
+    return result
+
+
+def _queue(repo, kind):
+    path = repo / ".brain" / "_queue" / f"{kind}.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_a_correction_is_captured(repo):
+    _prompt(repo, "no, you have to live run before you push")
+    items = _queue(repo, "corrections")
+    assert len(items) == 1
+    assert "live run" in items[0]["prompt"]
+
+
+def test_an_ordinary_prompt_is_not_captured(repo):
+    _prompt(repo, "add a flag for the tracker")
+    assert _queue(repo, "corrections") == []
+
+
+def test_the_prompt_hook_prints_nothing(repo):
+    """It fires on EVERY prompt. One token here is a tax on every turn, forever."""
+    result = _prompt(repo, "no, you have to live run before you push")
+    assert result.stdout == "", "UserPromptSubmit must never inject context"
+
+
+def test_capture_is_a_no_op_without_a_brain(bare_repo):
+    payload = {"session_id": "s", "cwd": str(bare_repo), "prompt": "never do that"}
+    result = subprocess.run(
+        [sys.executable, str(CAPTURE_HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_a_failed_command_queues_pain(repo):
+    _install_rule(repo)
+    _post(repo, "npm run build", event="PostToolUseFailure")
+    pain = _queue(repo, "pain")
+    assert len(pain) == 1
+    assert pain[0]["cmd"] == "npm run build"
+    assert "non-zero" in pain[0]["error"]
+
+
+def test_a_successful_command_queues_no_pain(repo):
+    _install_rule(repo)
+    _post(repo, "npm run build")
+    assert _queue(repo, "pain") == []

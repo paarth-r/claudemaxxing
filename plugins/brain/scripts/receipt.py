@@ -18,11 +18,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hookkit import receipts  # noqa: E402
+from hookkit import queue, receipts  # noqa: E402
 from hookkit.discovery import find_brain  # noqa: E402
 from hookkit.failopen import run_hook  # noqa: E402
 from hookkit.killswitch import is_disabled  # noqa: E402
-from hookkit.outcome import passed  # noqa: E402
+from hookkit.outcome import FAILURE_EVENT, passed  # noqa: E402
 from hookkit.protocol import command_of  # noqa: E402
 from hookkit.rules import emits, load_rules  # noqa: E402
 
@@ -38,6 +38,16 @@ def main(payload: dict) -> None:
 
     session = payload.get("session_id") or "unknown"
     exit_code = 0 if passed(payload) else 1
+
+    # Pain: a command that failed is a wall the agent hit. The resolution that
+    # eventually worked is the highest-signal gotcha there is, because rediscovering
+    # it costs real tool calls every single time.
+    if payload.get("hook_event_name") == FAILURE_EVENT:
+        queue.push(brain, "pain", {
+            "cmd": command,
+            "error": str(payload.get("error") or "")[:1000],
+            "session": session,
+        })
 
     seen = set()
     for rule in load_rules(brain):
