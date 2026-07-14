@@ -17,8 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hookkit import distiller, index  # noqa: E402
-from hookkit.discovery import find_brain  # noqa: E402
+from hookkit import distiller, index, mirror, vault  # noqa: E402
+from hookkit.discovery import find_brain, repo_root  # noqa: E402
 from hookkit.failopen import run_hook  # noqa: E402
 from hookkit.killswitch import is_disabled  # noqa: E402
 from hookkit.queue import peek  # noqa: E402
@@ -76,7 +76,15 @@ def main(payload: dict) -> None:
     # distiller wrote nothing, and a stale index is misinformation.
     index.generate(brain)
 
-    _log(brain, "wrote %d file(s): %s" % (len(written), ", ".join(written) or "-"))
+    # The repo's own .brain/ opens directly in Obsidian, mirror or no mirror.
+    vault.ensure(brain)
+
+    # Optional, and off unless configured. A stranger's brain never leaves the repo.
+    exported = mirror.export(brain, repo_root(brain).name)
+
+    _log(brain, "wrote %d file(s): %s | mirrored %d" % (
+        len(written), ", ".join(written) or "-", exported
+    ))
     # Deliberately no output.
 
 

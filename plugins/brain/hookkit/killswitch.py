@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from hookkit.config import flag
+
 
 def _global_disabled() -> bool:
     try:
@@ -19,22 +21,13 @@ def _global_disabled() -> bool:
         return False
 
 
-def config_flag(brain: Path, key: str, default: bool) -> bool:
-    """Read a flat `key: true|false` line from .brain/config.yml."""
-    config = Path(brain) / "config.yml"
-    try:
-        text = config.read_text()
-    except OSError:
-        return default
-
-    for line in text.splitlines():
-        name, separator, value = line.partition(":")
-        if separator and name.strip() == key:
-            return value.strip().lower() == "true"
-    return default
+def config_flag(brain, key: str, default: bool) -> bool:
+    """A boolean config value. Delegates to the layered reader so there is one
+    config implementation, not two."""
+    return flag(brain, key, default)
 
 
-def is_disabled(brain: Path | None) -> bool:
+def is_disabled(brain) -> bool:
     """True if the brain should do nothing at all right now."""
     if _global_disabled():
         return True
