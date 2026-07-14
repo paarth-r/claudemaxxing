@@ -105,15 +105,29 @@ def cmd_init(args, call_model=None) -> int:
 
     prompt = _bootstrap_prompt(docs)
     model = call_model or distiller._claude
-    written = distiller.apply(brain, distiller.parse_response(model(prompt)))
+    response = model(prompt)
+    index.generate(brain)
+
+    # An empty response means the model was never reached - `claude` is not on PATH,
+    # or not logged in, or the network is down. Saying "no rules found" there would be
+    # a lie: it tells someone their docs are ruleless when the tool never even ran.
+    if not str(response).strip():
+        print("  could not reach the `claude` CLI, so no rules were mined.")
+        print("  The brain is live and empty. Check `claude --version`, then run:")
+        print("    brain init")
+        return 0
+
+    written = distiller.apply(brain, distiller.parse_response(response))
     index.generate(brain)
 
     if not written:
-        print("  nothing mined. The docs may not contain enforceable rules.")
-    else:
-        for path in written:
-            print("  + %s" % path)
-        print("\nRules start as `warn` and earn the right to block. Run `brain status`.")
+        print("  the model found nothing enforceable in these docs.")
+        print("  The brain is live and empty; rules will appear as you correct the agent.")
+        return 0
+
+    for path in written:
+        print("  + %s" % path)
+    print("\nRules start as `warn` and earn the right to block. Run `brain status`.")
     return 0
 
 

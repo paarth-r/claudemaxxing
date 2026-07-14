@@ -189,3 +189,37 @@ def test_init_mines_rules_from_existing_docs(tmp_path, monkeypatch):
     rules = load_rules(tmp_path / ".brain")
     assert [r.id for r in rules] == ["test-before-commit"]
     assert rules[0].severity == "warn", "even a bootstrapped rule must be born warn"
+
+
+def test_init_distinguishes_a_broken_model_from_ruleless_docs(tmp_path, monkeypatch, capsys):
+    """If `claude` is missing or logged out, saying 'no rules found' is a LIE: it tells
+    the user their docs are ruleless when the tool never ran at all."""
+    from cli import cmd_init
+
+    _git_repo(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("Always run make test before committing.\n")
+    monkeypatch.chdir(tmp_path)
+
+    class Args:
+        bare = False
+
+    cmd_init(Args(), call_model=lambda _: "")  # the model was never reached
+    out = capsys.readouterr().out
+    assert "could not reach" in out
+    assert "may not contain" not in out
+
+
+def test_init_reports_genuinely_ruleless_docs_differently(tmp_path, monkeypatch, capsys):
+    from cli import cmd_init
+
+    _git_repo(tmp_path)
+    (tmp_path / "README.md").write_text("A library. No conventions here.\n")
+    monkeypatch.chdir(tmp_path)
+
+    class Args:
+        bare = False
+
+    cmd_init(Args(), call_model=lambda _: "[]")  # the model ran and found nothing
+    out = capsys.readouterr().out
+    assert "found nothing enforceable" in out
+    assert "could not reach" not in out

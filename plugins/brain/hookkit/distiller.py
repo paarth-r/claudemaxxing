@@ -210,10 +210,20 @@ def apply(brain: Path, ops):
 
 
 def _claude(prompt: str) -> str:
-    """Headless Sonnet. Any failure returns empty, which writes nothing."""
+    """Headless Sonnet, with NO tools and NO permission bypass.
+
+    This deliberately does not use --dangerously-skip-permissions. Shipping a tool
+    that silently spawns an unsandboxed agent on every session end, on a stranger's
+    machine, is not acceptable - and it is not needed. The model is asked for text
+    (a JSON array) and nothing else; `apply()` writes the files itself, through a
+    path check that refuses to escape .brain/. The model needs zero capabilities, so
+    it is given zero.
+
+    Any failure returns empty, which writes nothing.
+    """
     try:
         result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--print", "--model", "sonnet"],
+            ["claude", "--print", "--model", "sonnet", "--allowedTools", ""],
             input=prompt,
             capture_output=True,
             text=True,
