@@ -6,6 +6,8 @@ hook entrypoint goes through run_hook, which swallows everything and exits 0.
 Claude Code treats exit 0 as "proceed" and only exit 2 as "block". We never exit 2.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 import traceback
