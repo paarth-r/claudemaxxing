@@ -17,13 +17,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hookkit import receipts, stats  # noqa: E402
+from hookkit import lifecycle, receipts, stats  # noqa: E402
 from hookkit.discovery import find_brain, repo_root  # noqa: E402
 from hookkit.failopen import run_hook  # noqa: E402
 from hookkit.gate import ALLOW, DENY, REMEDY, decide  # noqa: E402
 from hookkit.killswitch import config_flag, is_disabled  # noqa: E402
 from hookkit.protocol import allow, command_of, deny, emit  # noqa: E402
 from hookkit.rules import load_rules  # noqa: E402
+
+
+def _record(rule, brain, field):
+    """Bump a stat, then let the rule be judged by its own updated evidence.
+
+    Re-reading the rule after the bump matters: a rule that just took its third
+    override must archive itself now, not at some later sweep that may never come.
+    """
+    stats.bump(rule, field)
+    for updated in load_rules(brain):
+        if updated.id == rule.id:
+            lifecycle.apply(updated, brain)
+            return
 
 
 def _run_remedy(rule, root):
@@ -79,12 +92,12 @@ def main(payload: dict) -> None:
         return
 
     if decision.action == ALLOW and decision.override:
-        stats.bump(decision.rule, "overridden")
+        _record(decision.rule, brain, "overridden")
         emit(allow(decision.context))
         return
 
     rule = decision.rule
-    stats.bump(rule, "fired")
+    _record(rule, brain, "fired")
 
     if decision.action == DENY:
         receipts.record_denial(brain, session, key_for(rule))
@@ -96,7 +109,7 @@ def main(payload: dict) -> None:
 
         if code == 0:
             receipts.append(brain, session, rule.receipt, rule.remedy_command, 0)
-            stats.bump(rule, "satisfied")
+            _record(rule, brain, "satisfied")
             emit(allow())
             return
 

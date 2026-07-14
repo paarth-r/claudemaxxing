@@ -276,3 +276,27 @@ def test_no_brain_receipt_hook_is_a_no_op(bare_repo):
     )
     assert result.returncode == 0
     assert result.stdout.strip() == ""
+
+
+def test_a_persistently_wrong_rule_archives_itself(repo):
+    """End to end: a rule the user keeps overriding stops existing.
+
+    This is what makes it safe to let a model author its own enforcement. Three
+    override strikes and the rule retires, with no human ever filing a bug against
+    their own memory system.
+    """
+    _install_rule(repo, remedy="exit 1")
+
+    for attempt in range(3):
+        # Each round: a fresh command string, denied once, then released on retry.
+        command = f"git commit -m attempt{attempt}"
+        assert _fire(repo, command=command)["permissionDecision"] == "deny"
+        assert _fire(repo, command=command)["permissionDecision"] == "allow"
+
+    assert not (repo / ".brain" / "rules" / "live-run.md").exists(), "the rule must retire"
+    archived = list((repo / ".brain" / "_archive").glob("*.md"))
+    assert len(archived) == 1
+    assert "overridden 3 times" in archived[0].read_text()
+
+    # And it must genuinely stop enforcing.
+    assert _fire(repo, command="git commit -m after") == {}, "an archived rule cannot gate"
