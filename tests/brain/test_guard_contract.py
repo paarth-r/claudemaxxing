@@ -172,3 +172,96 @@ def test_a_stale_receipt_does_not_satisfy_the_gate(repo):
     os.utime(repo / "src" / "main.py", (future, future))  # edited AFTER the run
     out = _fire(repo)
     assert out["permissionDecision"] == "deny", "a run predating the edit must not count"
+
+
+RECEIPT_HOOK = PLUGIN / "scripts" / "receipt.py"
+
+
+def _post(repo, command, response=None, session="sess-1"):
+    payload = {
+        "session_id": session,
+        "cwd": str(repo),
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+        "tool_response": {"exit_code": 0} if response is None else response,
+    }
+    env = dict(os.environ)
+    env["HOME"] = str(repo / "fakehome")
+    result = subprocess.run(
+        [sys.executable, str(RECEIPT_HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0
+    return result
+
+
+def _receipt_lines(repo, session="sess-1"):
+    path = repo / ".brain" / "_receipts" / f"{session}.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_agent_run_command_earns_a_receipt(repo):
+    _install_rule(repo)
+    _post(repo, "echo doing the live run")
+    kinds = [r["kind"] for r in _receipt_lines(repo)]
+    assert "live-run" in kinds
+
+
+def test_failed_agent_run_earns_a_failing_receipt(repo):
+    _install_rule(repo)
+    _post(repo, "echo doing the live run", response={"exit_code": 1})
+    assert _receipt_lines(repo)[0]["exit"] == 1
+
+
+def test_unknown_response_shape_is_not_recorded_as_a_pass(repo):
+    """Safety: an unrecognised payload must never mint a passing receipt."""
+    _install_rule(repo)
+    _post(repo, "echo doing the live run", response={"mystery": "future schema"})
+    assert _receipt_lines(repo)[0]["exit"] == 1
+
+
+def test_unrelated_command_earns_nothing(repo):
+    _install_rule(repo)
+    _post(repo, "git status")
+    assert _receipt_lines(repo) == []
+
+
+def test_agent_run_then_commit_sails_through(repo):
+    """The happy path, end to end: do the work, then commit, and never see the gate."""
+    _install_rule(repo, remedy="exit 1")  # the remedy would DENY if the gate ran it
+    old = time.time() - 100
+    os.utime(repo / "src" / "main.py", (old, old))
+    _post(repo, "echo live run")
+    assert _fire(repo) == {}, "a commit after a real live run must pass silently"
+
+
+def test_failed_agent_run_does_not_let_the_commit_through(repo):
+    _install_rule(repo, remedy="exit 1")
+    old = time.time() - 100
+    os.utime(repo / "src" / "main.py", (old, old))
+    _post(repo, "echo live run", response={"exit_code": 1})
+    out = _fire(repo)
+    assert out["permissionDecision"] == "deny", "a FAILED run must not satisfy the rule"
+
+
+def test_no_brain_receipt_hook_is_a_no_op(bare_repo):
+    payload = {
+        "session_id": "s",
+        "cwd": str(bare_repo),
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo hi"},
+        "tool_response": {"exit_code": 0},
+    }
+    result = subprocess.run(
+        [sys.executable, str(RECEIPT_HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
