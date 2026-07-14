@@ -1,7 +1,7 @@
 import sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from monitor import sparkline, render, SPARK_CHARS
+from monitor import sparkline, render, render_heatmap, SPARK_CHARS
 
 
 def test_sparkline_empty_is_empty_string():
@@ -48,3 +48,21 @@ def test_render_shows_suggestion_at_above_pace():
     text = _panel_text(panel)
     assert "Pace: ABOVE" in text
     assert "SUGGEST" in text
+
+
+def _cube_row_pixel_width(cube_line):
+    return len(cube_line.plain)
+
+def test_render_heatmap_uses_more_cubes_on_a_wider_console():
+    now = 100000
+    window_history = [{"resets_at": now - i * 18000, "peak_usage_percentage": 50} for i in range(1, 30)]
+    narrow_cube_line, _ = render_heatmap(window_history, 10, now + 18000, now, console_width=30)
+    wide_cube_line, _ = render_heatmap(window_history, 10, now + 18000, now, console_width=200)
+    assert _cube_row_pixel_width(wide_cube_line) > _cube_row_pixel_width(narrow_cube_line)
+
+def test_render_heatmap_defaults_to_module_console_width():
+    # No console_width passed -> falls back to the module-level console.width
+    # rather than raising or silently doing nothing.
+    now = 100000
+    result = render_heatmap([], 10, now + 18000, now)
+    assert result is not None

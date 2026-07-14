@@ -17,7 +17,7 @@ from pace import (
 )
 from quotes import BELOW_QUOTES, AT_QUOTES, ABOVE_QUOTES, pick_quote, format_attribution
 from stats import tokens_per_minute, count_active_claude_sessions
-from heatmap import build_cube_row, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
+from heatmap import build_cube_row, cubes_that_fit, color_for_pct, format_time_ago, CUBE_WIDTH, GAP_WIDTH
 from model_burn import gather_model_stats, suggest, apply_estimates, heaviest_session, suggest_hot_session_action
 
 QUOTE_POOLS = {"BELOW": BELOW_QUOTES, "AT": AT_QUOTES, "ABOVE": ABOVE_QUOTES}
@@ -71,8 +71,12 @@ def pace_color(pace):
     return {"ABOVE": "red", "AT": "yellow", "BELOW": "green"}[pace]
 
 
-def render_heatmap(window_history, current_peak_pct, current_window_end, now):
-    cubes = build_cube_row(window_history, current_peak_pct, current_window_end, now)
+def render_heatmap(window_history, current_peak_pct, current_window_end, now, console_width=None):
+    if console_width is None:
+        console_width = console.width
+    available_width = console_width - 4  # 2 chars Panel border + 2 chars default padding
+    cubes = build_cube_row(window_history, current_peak_pct, current_window_end, now,
+                           max_cubes=cubes_that_fit(available_width))
     if not cubes:
         return None
 
