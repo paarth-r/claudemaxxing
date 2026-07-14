@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pace import (
@@ -8,6 +8,8 @@ from pace import (
     compute_pace,
     is_stale,
     format_duration,
+    project_landing,
+    format_clock,
 )
 
 def test_elapsed_percentage_at_window_start():
@@ -92,3 +94,51 @@ def test_format_duration_zero_or_negative_is_now():
 
 def test_format_duration_rounds_down_seconds():
     assert format_duration(125) == "2m"
+
+def test_project_landing_exhausts_before_reset():
+    # 50% used, 1.0%/min, 60 min remaining -> exhausts at 50 min in
+    result = project_landing(used_pct=50, current_rate=1.0, now=1000, resets_at=1000 + 3600)
+    assert result == {"kind": "exhaust", "at": 4000.0}
+
+def test_project_landing_lands_after_reset():
+    # 50% used, 0.5%/min, 60 min remaining -> only reaches 80% by reset
+    result = project_landing(used_pct=50, current_rate=0.5, now=1000, resets_at=1000 + 3600)
+    assert result == {"kind": "land", "pct": 80.0}
+
+def test_project_landing_zero_rate_lands_at_used_pct():
+    result = project_landing(used_pct=42.0, current_rate=0.0, now=1000, resets_at=1000 + 3600)
+    assert result == {"kind": "land", "pct": 42.0}
+
+def test_project_landing_negative_rate_lands_at_used_pct():
+    result = project_landing(used_pct=42.0, current_rate=-0.3, now=1000, resets_at=1000 + 3600)
+    assert result == {"kind": "land", "pct": 42.0}
+
+def test_project_landing_already_at_100_exhausts_now():
+    result = project_landing(used_pct=100, current_rate=0.5, now=1000, resets_at=1000 + 3600)
+    assert result == {"kind": "exhaust", "at": 1000.0}
+
+def test_project_landing_exact_boundary_is_exhaust_not_land():
+    # minutes_to_100 (60) == remaining_minutes (60) exactly -> exhaust wins
+    result = project_landing(used_pct=40, current_rate=1.0, now=1000, resets_at=1000 + 3600)
+    assert result == {"kind": "exhaust", "at": 4600.0}
+
+
+def _local_ts(hour, minute):
+    # Builds a timestamp for today at the given local hour/minute, so the
+    # test is timezone-agnostic - it works no matter what TZ the machine
+    # running pytest is set to.
+    now = time.localtime()
+    t = time.struct_time((now.tm_year, now.tm_mon, now.tm_mday, hour, minute, 0, 0, 0, -1))
+    return time.mktime(t)
+
+def test_format_clock_pm_no_leading_zero():
+    assert format_clock(_local_ts(19, 20)) == "7:20pm"
+
+def test_format_clock_am_no_leading_zero():
+    assert format_clock(_local_ts(7, 5)) == "7:05am"
+
+def test_format_clock_midnight_is_12am():
+    assert format_clock(_local_ts(0, 5)) == "12:05am"
+
+def test_format_clock_noon_is_12pm():
+    assert format_clock(_local_ts(12, 0)) == "12:00pm"

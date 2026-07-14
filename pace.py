@@ -1,3 +1,6 @@
+import time
+
+
 def compute_elapsed_percentage(resets_at, now, window_seconds=18000):
     remaining = resets_at - now
     if remaining <= 0:
@@ -58,3 +61,21 @@ def format_duration(seconds):
     if hours > 0:
         return "{}h {}m".format(hours, minutes)
     return "{}m".format(minutes)
+
+
+def project_landing(used_pct, current_rate, now, resets_at):
+    """Where the current rate lands if it holds steady. Either the window
+    exhausts (hits 100%) before it resets, or it doesn't and there's
+    allowance left unused at reset time."""
+    remaining_minutes = (resets_at - now) / 60
+    if current_rate <= 0:
+        return {"kind": "land", "pct": max(0.0, min(100.0, used_pct))}
+    minutes_to_100 = (100 - used_pct) / current_rate
+    if minutes_to_100 <= remaining_minutes:
+        return {"kind": "exhaust", "at": now + minutes_to_100 * 60}
+    pct = used_pct + current_rate * remaining_minutes
+    return {"kind": "land", "pct": max(0.0, min(100.0, pct))}
+
+
+def format_clock(epoch_seconds):
+    return time.strftime("%-I:%M%p", time.localtime(epoch_seconds)).lower()
