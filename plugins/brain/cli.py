@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from hookkit import distiller, index, mirror, queue, receipts, vault  # noqa: E402
 from hookkit.config import get  # noqa: E402
-from hookkit.discovery import find_brain, repo_root  # noqa: E402
+from hookkit.discovery import find_brain, repo_root, work_root  # noqa: E402
 from hookkit.gate import decide  # noqa: E402
 from hookkit.killswitch import is_disabled  # noqa: E402
 from hookkit.rules import load_rules  # noqa: E402
@@ -215,7 +215,7 @@ def cmd_why(args) -> int:
 
 def cmd_check(args) -> int:
     brain = _brain_or_die()
-    root = repo_root(brain)
+    root = work_root(Path.cwd(), brain)
     tool_input = {"command": args.cmd}
 
     decision = decide(

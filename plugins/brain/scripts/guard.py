@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hookkit import lifecycle, receipts, stats  # noqa: E402
-from hookkit.discovery import find_brain, repo_root  # noqa: E402
+from hookkit.discovery import find_brain, work_root  # noqa: E402
 from hookkit.failopen import run_hook  # noqa: E402
 from hookkit.gate import ALLOW, DENY, REMEDY, decide  # noqa: E402
 from hookkit.killswitch import config_flag, is_disabled  # noqa: E402
@@ -68,7 +68,10 @@ def main(payload: dict) -> None:
     tool_name = payload.get("tool_name") or ""
     tool_input = payload.get("tool_input") or {}
     command = command_of(tool_input)
-    root = repo_root(brain)
+
+    # Verify against the tree this call came FROM, not the tree that owns the brain.
+    # In a git worktree those differ, and using the wrong one tests the wrong code.
+    root = work_root(payload.get("cwd") or Path.cwd(), brain)
 
     rules = load_rules(brain)
     if not rules:
